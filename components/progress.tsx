@@ -3,16 +3,19 @@
 import { motion } from "motion/react";
 import { CalendarCheck, CheckCircle2, Clock, Flame, ListChecks, Trophy } from "lucide-react";
 import { useMemo } from "react";
-import { AnimatedNumber, Bar, Card, Dot, Page, Ring, SectionTitle } from "@/components/ui";
 import { colorOf } from "@/lib/colors";
 import { addDays, dayKey, dueLabel, fmtDuration, parseDay, WEEKDAYS_SHORT } from "@/lib/dates";
 import { levelInfo, levelTitle } from "@/lib/points";
 import { streakOf } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import { format } from "date-fns";
+import { AnimatedNumber, Bar, Card, Dot, Ring, SectionTitle } from "./ui";
+import { useUI } from "./ui-state";
 
-export default function ProgressPage() {
+/** Points, streak, focus history and attendance — the bottom of Home. */
+export function ProgressSection() {
   const { profile, days, items, courses, attendance, now, settings } = useStore();
+  const ui = useUI();
   const lvl = levelInfo(profile.points);
   const today = dayKey(now);
 
@@ -40,11 +43,11 @@ export default function ProgressPage() {
     .slice(0, 8);
 
   return (
-    <Page>
-      <h1 className="text-[28px] font-bold tracking-[-0.02em] text-ink sm:text-[34px]">Progress</h1>
+    <section id="progress" className="scroll-mt-20">
+      <SectionTitle>Progress</SectionTitle>
 
       {/* level */}
-      <Card className="relative mt-6 overflow-hidden p-5">
+      <Card className="relative overflow-hidden p-5">
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(232,181,74,0.18),transparent_70%)]" />
         <div className="relative flex items-center gap-5">
           <Ring value={lvl.progress} size={92} stroke={8} color="var(--gold)">
@@ -111,7 +114,7 @@ export default function ProgressPage() {
       </Card>
 
       {/* focus chart */}
-      <section className="mt-8">
+      <section className="mt-6">
         <SectionTitle>Focus · last 14 days</SectionTitle>
         <Card className="p-4">
           <div className="flex h-36 items-end gap-1.5">
@@ -141,7 +144,7 @@ export default function ProgressPage() {
       </section>
 
       {/* attendance */}
-      <section className="mt-8">
+      <section className="mt-6">
         <SectionTitle>Attendance</SectionTitle>
         <Card className="p-4">
           <div className="flex items-center gap-4">
@@ -156,11 +159,11 @@ export default function ProgressPage() {
             </div>
           </div>
           {perCourse.some((p) => p.a + p.m > 0) && (
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-4 flex flex-col gap-1">
               {perCourse
                 .filter((p) => p.a + p.m > 0)
                 .map(({ c, a, m, rate }) => (
-                  <div key={c.id}>
+                  <button key={c.id} onClick={() => ui.openCourse(c.id)} className="-mx-2 rounded-lg px-2 py-1 text-left hover:bg-hover">
                     <div className="mb-1 flex items-center justify-between text-[13px]">
                       <span className="flex items-center gap-2 text-ink">
                         <Dot color={c.color} /> {c.code || c.name}
@@ -170,7 +173,7 @@ export default function ProgressPage() {
                       </span>
                     </div>
                     <Bar value={rate} color={colorOf(c.color).dot} height={5} />
-                  </div>
+                  </button>
                 ))}
             </div>
           )}
@@ -178,7 +181,7 @@ export default function ProgressPage() {
       </section>
 
       {recent.length > 0 && (
-        <section className="mt-8">
+        <section className="mt-6">
           <SectionTitle>Recently completed</SectionTitle>
           <Card className="p-1">
             {recent.map((i) => (
@@ -191,7 +194,7 @@ export default function ProgressPage() {
           </Card>
         </section>
       )}
-    </Page>
+    </section>
   );
 }
 

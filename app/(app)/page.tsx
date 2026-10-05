@@ -2,19 +2,20 @@
 
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "motion/react";
-import { CalendarPlus, ChevronDown, Pause, Play, Sparkles } from "lucide-react";
+import { BookOpen, CalendarPlus, ChevronDown, ChevronRight, Link2, Pause, Play, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useMarkAttendance } from "@/components/class-gate";
+import { ProgressSection } from "@/components/progress";
 import { ClassRow, ItemRow, Meta, whenText } from "@/components/rows";
 import { useToggleSubtask } from "@/components/subtasks";
 import { useTick } from "@/components/timer-engine";
-import { Bar, Button, Card, Check, Page, Ring, SectionTitle } from "@/components/ui";
+import { Bar, Button, Card, Check, IconButton, Page, Ring, SectionTitle } from "@/components/ui";
 import { useUI } from "@/components/ui-state";
 import { phaseMs, remainingOf } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
 import { addDays, dayKey, dayLabel, daysUntil, fmtClock, greeting } from "@/lib/dates";
-import { isOverdue, isVisible, nextSubtasks, progressOf, workQueue } from "@/lib/schedule";
+import { isOverdue, isVisible, meetingSummary, nextSubtasks, progressOf, workQueue } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ClassSession, Item } from "@/lib/types";
 
@@ -138,8 +139,74 @@ export default function Home() {
             </AnimatePresence>
           </section>
         )}
+
+        {ready && courses.length > 0 && <Classes />}
+
+        {ready && <ProgressSection />}
       </div>
     </Page>
+  );
+}
+
+/** Every class, one tap from Home — opens its page (schedule, links, textbook, work). */
+function Classes() {
+  const { courses, attendance } = useStore();
+  const ui = useUI();
+  return (
+    <section>
+      <SectionTitle
+        right={
+          <div className="-my-1 flex items-center gap-1">
+            <button onClick={() => ui.setImportOpen(true)} className="rounded-md px-2 py-1 text-[12.5px] text-ink-3 hover:bg-hover hover:text-ink-2">
+              Import .ics
+            </button>
+            <IconButton label="Add a class" onClick={() => ui.setNewCourse(true)}>
+              <Plus className="h-4 w-4" />
+            </IconButton>
+          </div>
+        }
+      >
+        Classes
+      </SectionTitle>
+      <Card className="p-1">
+        {courses.map((c) => {
+          const att = [...attendance.values()].filter((a) => a.courseId === c.id);
+          const a = att.filter((x) => x.status === "attended").length;
+          const m = att.filter((x) => x.status === "missed").length;
+          const links = c.links?.length || 0;
+          return (
+            <button
+              key={c.id}
+              onClick={() => ui.openCourse(c.id)}
+              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors hover:bg-hover active:bg-press"
+            >
+              <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorOf(c.color).dot }} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[14.5px] text-ink">{c.name}</div>
+                <Meta
+                  parts={[
+                    c.code,
+                    c.meetings[0] && meetingSummary(c.meetings[0]),
+                    c.meetings.length > 1 && `+${c.meetings.length - 1}`,
+                    a + m > 0 && `${Math.round((a / (a + m)) * 100)}% attended`,
+                  ]}
+                />
+              </div>
+              {links > 0 && (
+                <span className="flex shrink-0 items-center gap-1 text-[12px] text-ink-3" aria-label={`${links} link${links > 1 ? "s" : ""}`}>
+                  <Link2 className="h-3.5 w-3.5" />
+                  {links}
+                </span>
+              )}
+              {c.textbook.kind !== "none" && <BookOpen className="h-4 w-4 shrink-0 text-ink-3" aria-label="Has textbook" />}
+              <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
+            </button>
+          );
+        })}
+      </Card>
+    </section>
   );
 }
 

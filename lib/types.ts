@@ -38,6 +38,13 @@ export interface Meeting {
   label?: string;
 }
 
+/** A bookmark that belongs to a class (syllabus, LMS page, slides, …). */
+export interface CourseLink {
+  id: string;
+  title?: string;
+  url: string;
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -46,6 +53,7 @@ export interface Course {
   location?: string;
   textbook: Textbook;
   meetings: Meeting[];
+  links?: CourseLink[];
   createdAt: number;
   source?: "ics" | "manual";
 }

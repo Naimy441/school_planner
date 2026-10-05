@@ -69,7 +69,7 @@ export function FocusView({ timer, item }: { timer: TimerState; item: Item }) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[560px] flex-col items-center px-4 pb-32 pt-2 md:pt-10">
+    <div className="mx-auto flex w-full max-w-[560px] flex-col items-center px-4 pb-24 pt-2 md:pt-10">
       {/* item header */}
       <button
         onClick={() => ui.openItem(item.id)}

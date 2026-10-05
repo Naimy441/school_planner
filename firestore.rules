@@ -67,7 +67,8 @@ service cloud.firestore {
           && optString('location', 300)
           && optString('color', 30)
           && data().meetings is list && data().meetings.size() <= 60
-          && data().textbook is map;
+          && data().textbook is map
+          && optList('links', 100);
       }
 
       match /items/{itemId} {

@@ -123,6 +123,7 @@ export function ItemRow({
 
 export function ClassRow({ s, onCheckIn }: { s: ClassSession; onCheckIn?: () => void }) {
   const { courseMap, now } = useStore();
+  const ui = useUI();
   const c = courseMap.get(s.courseId);
   if (!c) return null;
   const color = colorOf(c.color);
@@ -130,7 +131,13 @@ export function ClassRow({ s, onCheckIn }: { s: ClassSession; onCheckIn?: () => 
   const mins = Math.round((s.start - now) / 60_000);
   return (
     <motion.div {...rowMotion} className="overflow-hidden">
-      <div className="flex items-center gap-3 rounded-lg px-2.5 py-2.5">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => ui.openCourse(c.id)}
+        onKeyDown={(e) => e.key === "Enter" && ui.openCourse(c.id)}
+        className="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2.5 transition-colors hover:bg-hover active:bg-press"
+      >
         <span className={lead}>
           <span className="h-[18px] w-[3px] rounded-full" style={{ background: color.dot }} />
         </span>
@@ -141,7 +148,11 @@ export function ClassRow({ s, onCheckIn }: { s: ClassSession; onCheckIn?: () => 
         {live && onCheckIn ? (
           <motion.button
             whileTap={{ scale: 0.94 }}
-            onClick={onCheckIn}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCheckIn();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
             className="shrink-0 rounded-md bg-good px-2.5 py-1 text-[12px] font-semibold text-white"
           >
             I&apos;m here

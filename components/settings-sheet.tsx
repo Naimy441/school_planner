@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "firebase/auth";
-import { ChevronRight, GraduationCap, LogOut, Monitor, Smartphone, Volume2, X } from "lucide-react";
+import { CalendarPlus, ChevronRight, LogOut, Monitor, Smartphone, Volume2, X } from "lucide-react";
 import Link from "next/link";
 import { updateSettings } from "@/lib/actions";
 import { auth } from "@/lib/firebase";
@@ -34,16 +34,18 @@ export function SettingsSheet() {
           </div>
         </div>
 
-        <Link
-          href="/classes"
-          onClick={close}
-          className="mt-3 flex items-center justify-between rounded-lg bg-hover px-3 py-2.5 text-[14px] text-ink hover:bg-press"
+        <button
+          onClick={() => {
+            close();
+            ui.setImportOpen(true);
+          }}
+          className="mt-3 flex w-full items-center justify-between rounded-lg bg-hover px-3 py-2.5 text-left text-[14px] text-ink hover:bg-press"
         >
           <span className="flex items-center gap-2">
-            <GraduationCap className="h-4 w-4 text-ink-2" /> Classes, textbooks & timetable import
+            <CalendarPlus className="h-4 w-4 text-ink-2" /> Import timetable (.ics)
           </span>
           <ChevronRight className="h-4 w-4 text-ink-3" />
-        </Link>
+        </button>
 
         <div className="mt-6 text-[12.5px] font-medium text-ink-2">Default rhythm</div>
         <div className="mt-2 grid grid-cols-3 gap-1.5">

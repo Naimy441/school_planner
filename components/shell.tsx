@@ -1,18 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import {
-  BookOpen,
-  ChartNoAxesColumn,
-  ClipboardList,
-  FileText,
-  GraduationCap,
-  House,
-  ListChecks,
-  Plus,
-  Settings as SettingsIcon,
-  Timer,
-} from "lucide-react";
+import { BookOpen, ChevronLeft, ClipboardList, FileText, ListChecks, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -24,17 +13,6 @@ import { useTick } from "./timer-engine";
 import { AnimatedNumber, cn, Ring, spring } from "./ui";
 import { useUI } from "./ui-state";
 
-const NAV = [
-  { href: "/", label: "Home", icon: House },
-  { href: "/focus", label: "Focus", icon: Timer },
-  { href: "/progress", label: "Progress", icon: ChartNoAxesColumn },
-];
-
-function useActive() {
-  const path = usePathname();
-  return (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-}
-
 export function PointsPill({ compact = false }: { compact?: boolean }) {
   const { profile } = useStore();
   const lvl = levelInfo(profile.points);
@@ -45,7 +23,7 @@ export function PointsPill({ compact = false }: { compact?: boolean }) {
     prev.current = profile.points;
   }, [profile.points]);
   return (
-    <Link href="/progress" className="focus-ring">
+    <Link href="/#progress" className="focus-ring rounded-full" aria-label="Your progress">
       <motion.div
         key={bump}
         animate={bump ? { scale: [1, 1.12, 1] } : undefined}
@@ -72,7 +50,7 @@ function TimerBadge() {
   return (
     <span
       className={cn(
-        "tnum rounded-md px-1.5 py-[1px] text-[11px] font-semibold",
+        "tnum rounded-full px-2.5 py-1 text-[12px] font-semibold",
         timer.phase === "work" ? "bg-accent-soft text-accent" : "bg-good-soft text-good",
       )}
     >
@@ -82,7 +60,7 @@ function TimerBadge() {
   );
 }
 
-function QuickAdd({ align = "right" }: { align?: "left" | "right" }) {
+function QuickAdd() {
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -117,10 +95,7 @@ function QuickAdd({ align = "right" }: { align?: "left" | "right" }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ duration: 0.14 }}
-            className={cn(
-              "absolute top-11 z-50 w-48 overflow-hidden rounded-lg border border-line bg-card-2 p-1 shadow-[0_16px_40px_rgba(0,0,0,0.5)]",
-              align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left",
-            )}
+            className="absolute right-0 top-11 z-50 w-48 origin-top-right overflow-hidden rounded-lg border border-line bg-card-2 p-1 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
           >
             {opts.map((o) => (
               <button
@@ -139,70 +114,6 @@ function QuickAdd({ align = "right" }: { align?: "left" | "right" }) {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-function Sidebar() {
-  const isActive = useActive();
-  const { user, courses } = useStore();
-  const ui = useUI();
-  return (
-    <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col border-r border-line bg-panel md:flex">
-      <div className="flex items-center gap-2.5 px-3 pb-2 pt-4">
-        <Avatar />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold text-ink">{user?.displayName?.split(" ")[0] || "You"}&apos;s Planner</div>
-        </div>
-        <QuickAdd align="left" />
-      </div>
-      <nav className="mt-2 flex flex-col gap-[2px] px-2">
-        {NAV.map((n) => {
-          const active = isActive(n.href);
-          return (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={cn(
-                "relative flex h-[30px] items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors",
-                active ? "text-ink" : "text-ink-2 hover:bg-hover hover:text-ink",
-              )}
-            >
-              {active && <motion.span layoutId="side-active" className="absolute inset-0 rounded-md bg-press" transition={spring} />}
-              <n.icon className="relative h-[17px] w-[17px]" />
-              <span className="relative flex-1">{n.label}</span>
-              {n.href === "/focus" && (
-                <span className="relative">
-                  <TimerBadge />
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="flex-1" />
-      <div className="px-2 pb-2">
-        <Link
-          href="/classes"
-          className={cn(
-            "flex h-[30px] items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors",
-            isActive("/classes") ? "bg-press text-ink" : "text-ink-3 hover:bg-hover hover:text-ink-2",
-          )}
-        >
-          <GraduationCap className="h-[17px] w-[17px]" />
-          Classes{courses.length ? <span className="ml-auto text-[12px] text-ink-3">{courses.length}</span> : null}
-        </Link>
-      </div>
-      <div className="flex items-center justify-between gap-2 border-t border-line p-3">
-        <PointsPill />
-        <button
-          onClick={() => ui.setSettingsOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-ink-3 hover:bg-hover hover:text-ink"
-          aria-label="Settings"
-        >
-          <SettingsIcon className="h-[17px] w-[17px]" />
-        </button>
-      </div>
-    </aside>
   );
 }
 
@@ -226,12 +137,43 @@ function Avatar() {
   );
 }
 
-function MobileHeader() {
+/** Back to Home from the few screens that aren't it (the focus session, widget linking). */
+function HomeButton() {
+  const path = usePathname();
+  if (path === "/") return null;
   return (
-    <header className="pt-safe sticky top-0 z-40 border-b border-transparent bg-app/80 backdrop-blur-xl md:hidden">
-      <div className="flex h-12 items-center justify-between gap-3 px-4">
-        <Avatar />
+    <Link
+      href="/"
+      className="focus-ring flex h-8 items-center gap-1 rounded-md pl-1 pr-2 text-[14px] text-ink-2 hover:bg-hover hover:text-ink"
+    >
+      <ChevronLeft className="h-4 w-4" />
+      Home
+    </Link>
+  );
+}
+
+/** While a session runs, a live countdown that leads back to it. */
+function FocusChip() {
+  const path = usePathname();
+  const { timer } = useStore();
+  if (!timer?.active || path === "/focus") return null;
+  return (
+    <Link href="/focus" aria-label="Back to focus session" className="focus-ring relative flex items-center rounded-full">
+      <TimerBadge />
+    </Link>
+  );
+}
+
+function Header() {
+  return (
+    <header className="pt-safe sticky top-0 z-40 bg-app/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-12 w-full max-w-[760px] items-center justify-between gap-3 px-4 sm:px-8 md:h-14">
         <div className="flex items-center gap-2">
+          <Avatar />
+          <HomeButton />
+        </div>
+        <div className="flex items-center gap-2">
+          <FocusChip />
           <PointsPill compact />
           <QuickAdd />
         </div>
@@ -240,57 +182,11 @@ function MobileHeader() {
   );
 }
 
-function TabBar() {
-  const isActive = useActive();
-  return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-[rgba(25,25,25,0.82)] backdrop-blur-xl md:hidden">
-      <div className="mx-auto flex max-w-[420px] items-stretch justify-around px-4">
-        {NAV.map((n) => {
-          const active = isActive(n.href);
-          return (
-            <Link key={n.href} href={n.href} className="relative flex flex-1 flex-col items-center gap-[3px] pb-1.5 pt-2">
-              {active && (
-                <motion.span
-                  layoutId="tab-active"
-                  className="absolute top-0 h-[2px] w-8 rounded-full bg-ink"
-                  transition={spring}
-                />
-              )}
-              <motion.span whileTap={{ scale: 0.85 }} className={cn("relative", active ? "text-ink" : "text-ink-3")}>
-                <n.icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.2 : 1.8} />
-                {n.href === "/focus" && <FocusDot />}
-              </motion.span>
-              <span className={cn("text-[10px] font-medium", active ? "text-ink" : "text-ink-3")}>{n.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
-}
-
-function FocusDot() {
-  const { timer } = useStore();
-  if (!timer?.active) return null;
-  return (
-    <span
-      className={cn(
-        "pulse-ring absolute -right-1 -top-0.5 h-2 w-2 rounded-full",
-        timer.phase === "work" ? "bg-accent text-accent" : "bg-good text-good",
-      )}
-    />
-  );
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <MobileHeader />
-        {children}
-      </div>
-      <TabBar />
+    <div className="flex min-h-dvh min-w-0 flex-col">
+      <Header />
+      {children}
     </div>
   );
 }

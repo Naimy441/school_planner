@@ -77,7 +77,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(84px+var(--safe-bottom))] z-[95] flex flex-col items-center gap-2 px-4 md:bottom-6">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(24px+var(--safe-bottom))] z-[95] flex flex-col items-center gap-2 px-4">
         <AnimatePresence>
           {toasts.map((t) => (
             <motion.div
