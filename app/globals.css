@@ -1,26 +1,187 @@
 @import "tailwindcss";
 
+/* Notion-in-dark-mode palette */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --app: #191919;
+  --panel: #202020;
+  --card: #252525;
+  --card-2: #2c2c2c;
+  --hover: rgba(255, 255, 255, 0.055);
+  --press: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.085);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --ink: rgba(255, 255, 255, 0.92);
+  --ink-2: rgba(255, 255, 255, 0.6);
+  --ink-3: rgba(255, 255, 255, 0.38);
+  --accent: #2383e2;
+  --accent-soft: rgba(35, 131, 226, 0.16);
+  --good: #4fae7e;
+  --good-soft: rgba(79, 174, 126, 0.16);
+  --gold: #e8b54a;
+  --gold-soft: rgba(232, 181, 74, 0.15);
+  --warn: #e0864f;
+  --warn-soft: rgba(224, 134, 79, 0.15);
+  --danger: #e05c59;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-app: var(--app);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-hover: var(--hover);
+  --color-press: var(--press);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Inter", Helvetica, "Apple Color Emoji", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, monospace;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--app);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+::selection {
+  background: rgba(35, 131, 226, 0.35);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* iOS zooms inputs under 16px — keep them at 16 on touch devices */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.pt-safe {
+  padding-top: var(--safe-top);
+}
+
+.pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Notion-ish soft focus ring */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(35, 131, 226, 0.55);
+}
+
+@layer components {
+  .ghost-input {
+    background: transparent;
+    outline: none;
+    border: none;
+    width: 100%;
+  }
+  .ghost-input::placeholder {
+    color: var(--ink-3);
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  animation: pulse-ring 1.8s var(--ease-out-soft) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

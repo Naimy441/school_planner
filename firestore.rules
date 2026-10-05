@@ -1,0 +1,134 @@
+rules_version = '2';
+
+// Every document lives under /users/{uid}. A signed-in user can only ever
+// touch their own tree, and writes are shape-checked so a buggy or hostile
+// client can't stuff arbitrary data in. Anything not matched is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function data() {
+      return request.resource.data;
+    }
+
+    // Bounded document width keeps payloads sane.
+    function fieldsWithin(n) {
+      return data().keys().size() <= n;
+    }
+
+    function optString(field, max) {
+      return !(field in data()) || data()[field] == null
+        || (data()[field] is string && data()[field].size() <= max);
+    }
+
+    function optNumber(field) {
+      return !(field in data()) || data()[field] == null || data()[field] is number;
+    }
+
+    function optList(field, max) {
+      return !(field in data()) || (data()[field] is list && data()[field].size() <= max);
+    }
+
+    function reqString(field, max) {
+      return field in data() && data()[field] is string
+        && data()[field].size() > 0 && data()[field].size() <= max;
+    }
+
+    match /users/{uid} {
+      // Profile doc: running totals + settings.
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && fieldsWithin(30)
+        && optNumber('points')
+        && optNumber('focusMs')
+        && optNumber('subtasksDone')
+        && optNumber('itemsDone')
+        && optNumber('classesAttended')
+        && optNumber('classesMissed')
+        && optString('displayName', 200)
+        && (!('settings' in data()) || data().settings is map);
+
+      match /courses/{courseId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(30)
+          && reqString('name', 200)
+          && optString('code', 60)
+          && optString('location', 300)
+          && optString('color', 30)
+          && data().meetings is list && data().meetings.size() <= 60
+          && data().textbook is map;
+      }
+
+      match /items/{itemId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(40)
+          && reqString('title', 300)
+          && data().kind in ['assignment', 'exam', 'textbook', 'task']
+          && data().status in ['open', 'done', 'archived']
+          && data().due is number
+          && optNumber('lateDue')
+          && optString('courseId', 128)
+          && optString('place', 300)
+          && optString('reward', 300)
+          && optString('where', 300)
+          && optString('notes', 20000)
+          && data().subtasks is list && data().subtasks.size() <= 300;
+      }
+
+      match /series/{seriesId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(30)
+          && reqString('title', 300)
+          && reqString('courseId', 128)
+          && data().days is list && data().days.size() <= 7
+          && reqString('time', 5)
+          && optNumber('lateDays');
+      }
+
+      match /attendance/{attId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(12)
+          && reqString('courseId', 128)
+          && data().status in ['attended', 'missed', 'skipped'];
+      }
+
+      match /days/{dayKey} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(12)
+          && optNumber('points')
+          && optNumber('focusMs')
+          && optNumber('subtasks')
+          && optNumber('items')
+          && optNumber('classes');
+      }
+
+      // Single live timer doc that every device (and the menu bar widget) follows.
+      match /state/{stateId} {
+        allow read, delete: if isOwner(uid) && stateId == 'timer';
+        allow create, update: if isOwner(uid) && stateId == 'timer'
+          && fieldsWithin(30)
+          && data().phase in ['work', 'break']
+          && optNumber('endsAt')
+          && optNumber('remainingMs')
+          && optNumber('workMin')
+          && optNumber('breakMin');
+      }
+
+      // Append-mostly log of completed focus blocks.
+      match /sessions/{sessionId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(12)
+          && data().workMs is number;
+      }
+    }
+  }
+}
