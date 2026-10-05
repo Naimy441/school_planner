@@ -110,6 +110,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
     return last && last > today ? last : addDays(today, 7 * 14);
   });
   const [lateDays, setLateDays] = useState("");
+  const [customLate, setCustomLate] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const changeKind = (k: typeof kind) => {
@@ -229,15 +230,42 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
                   <button
                     key={c.label}
                     type="button"
-                    onClick={() => setLateDays(c.days ? String(c.days) : "")}
+                    onClick={() => {
+                      setCustomLate(false);
+                      setLateDays(c.days ? String(c.days) : "");
+                    }}
                     className={cn(
                       "h-8 rounded-md px-3 text-[13px] font-medium transition-colors",
-                      (lateDays ? +lateDays : 0) === c.days ? "bg-accent text-white" : "bg-hover text-ink-2 hover:text-ink",
+                      !customLate && (lateDays ? +lateDays : 0) === c.days ? "bg-accent text-white" : "bg-hover text-ink-2 hover:text-ink",
                     )}
                   >
                     {c.label}
                   </button>
                 ))}
+                {customLate ? (
+                  <div className="flex h-8 items-center gap-1.5 rounded-md bg-accent pl-1 pr-2.5 text-[13px] font-medium text-white">
+                    <input
+                      autoFocus
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={60}
+                      value={lateDays}
+                      onChange={(e) => setLateDays(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                      aria-label="Days late work is accepted"
+                      className="h-6 w-10 rounded bg-white/20 text-center text-white outline-none"
+                    />
+                    days
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCustomLate(true)}
+                    className="h-8 rounded-md bg-hover px-3 text-[13px] font-medium text-ink-2 hover:text-ink"
+                  >
+                    Custom
+                  </button>
+                )}
               </div>
             </Field>
             <SeriesPreview days={days} time={time} start={start} end={end} lateDays={lateDays ? +lateDays : 0} />
