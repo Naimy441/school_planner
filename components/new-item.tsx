@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { format } from "date-fns";
+import { useMemo, useState } from "react";
 import { createItem, saveSeries } from "@/lib/actions";
-import { addDays, atTime, dayKey } from "@/lib/dates";
-import { seriesItemId } from "@/lib/schedule";
+import { addDays, atTime, dayKey, fmtTime } from "@/lib/dates";
+import { seriesItemId, sessionsBetween } from "@/lib/schedule";
 import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
 import type { Course, ItemKind } from "@/lib/types";
 import { Field, ScheduleFields, scheduleError, toSeriesRule, type Schedule } from "./repeat-fields";
-import { Button, inputCls, Segmented, Sheet } from "./ui";
+import { Button, inputCls, Segmented, Sheet, SwitchRow } from "./ui";
 import { useUI, type NewItemDraft } from "./ui-state";
 
 /** Last class day of the term, or ~14 weeks out. */
@@ -34,7 +35,7 @@ function defaultDue(kind: ItemKind, today: string) {
 
 function NewItemForm({ draft }: { draft: NewItemDraft }) {
   const ui = useUI();
-  const { uid, courses, courseMap } = useStore();
+  const { uid, courses, courseMap, now } = useStore();
   const [kind, setKind] = useState<Exclude<ItemKind, "textbook">>(draft.kind === "textbook" ? "task" : draft.kind);
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState(draft.courseId || "");
@@ -47,17 +48,34 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
     late: null,
   }));
   const [busy, setBusy] = useState(false);
+  const [classSession, setClassSession] = useState<string | null>(null);
   const isAssignment = kind === "assignment";
+  const course = courseMap.get(courseId);
+  // Upcoming meetings of the chosen class, for "exam during class".
+  const meetings = useMemo(() => {
+    if (!course) return [];
+    return sessionsBetween([course], today, addDays(today, 180)).filter((m) => m.start > now).slice(0, 40);
+  }, [course, today, now]);
+
+  const pickSession = (id: string | null) => {
+    setClassSession(id);
+    const m = meetings.find((x) => x.id === id);
+    if (!m) return;
+    setSchedule((s) => ({ ...s, due: m.start }));
+    setWhere(m.location || course?.location || "");
+  };
   const weekly = isAssignment && schedule.repeat;
 
   const changeKind = (k: typeof kind) => {
     setKind(k);
+    setClassSession(null);
     setSchedule((s) => ({ ...s, due: defaultDue(k, today), late: null, repeat: k === "assignment" && s.repeat }));
   };
 
   // default the repeat range to the class's term
   const changeCourse = (id: string) => {
     setCourseId(id);
+    setClassSession(null);
     setSchedule((s) => ({ ...s, until: termEnd(courseMap.get(id), today) }));
   };
 
@@ -133,13 +151,28 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
           </select>
         </Field>
 
-        <ScheduleFields
-          value={schedule}
-          onChange={setSchedule}
-          dueLabel={kind === "exam" ? "Exam" : "Due"}
-          allowRepeat={isAssignment}
-          allowLate={isAssignment}
-        />
+        {kind === "exam" && meetings.length > 0 && (
+          <SwitchRow label="During class" checked={classSession != null} onChange={(on) => pickSession(on ? meetings[0].id : null)} />
+        )}
+        {kind === "exam" && classSession != null ? (
+          <Field label="Which class">
+            <select value={classSession} onChange={(e) => pickSession(e.target.value)} className={inputCls}>
+              {meetings.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {format(m.start, "EEE, MMM d")} · {fmtTime(m.start)} – {fmtTime(m.end)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <ScheduleFields
+            value={schedule}
+            onChange={setSchedule}
+            dueLabel={kind === "exam" ? "Exam" : "Due"}
+            allowRepeat={isAssignment}
+            allowLate={isAssignment}
+          />
+        )}
         {weekly && !courseId && <p className="text-[12.5px] text-warn">Pick a class for weekly assignments.</p>}
 
         {kind === "exam" && (
