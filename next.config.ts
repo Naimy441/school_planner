@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   // sign-in works inside an iOS home-screen app (see README → "iOS sign-in").
   async rewrites() {
     return [
+      { source: "/__/firebase/init.json", destination: "/api/firebase-init" },
       { source: "/__/auth/:path*", destination: `${FIREBASE_AUTH_HOST}/__/auth/:path*` },
       { source: "/__/firebase/:path*", destination: `${FIREBASE_AUTH_HOST}/__/firebase/:path*` },
     ];
