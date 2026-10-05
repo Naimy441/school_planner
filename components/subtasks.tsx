@@ -23,6 +23,12 @@ export function useToggleSubtask() {
 
 export function SubtaskList({ item, placeholder = "Add a step" }: { item: Item; placeholder?: string }) {
   const { uid } = useStore();
+  const ui = useUI();
+  // Latest item for handlers that finish after an await (the delete confirmation).
+  const itemRef = useRef(item);
+  useEffect(() => {
+    itemRef.current = item;
+  });
   const toggle = useToggleSubtask();
   const [order, setOrder] = useState<string[]>(() => item.subtasks.map((s) => s.id));
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -50,8 +56,13 @@ export function SubtaskList({ item, placeholder = "Add a step" }: { item: Item; 
     setFocusId(s.id);
   };
 
-  const remove = (id: string) => {
-    const cur = item;
+  /** Blank steps go straight away (Backspace on an empty line); a step with words in it asks first. */
+  const remove = async (id: string, text: string) => {
+    if (text.trim()) {
+      const ok = await ui.confirm({ title: `Delete the step “${text.trim()}”?`, confirmLabel: "Delete step" });
+      if (!ok) return;
+    }
+    const cur = itemRef.current;
     const idx = cur.subtasks.findIndex((x) => x.id === id);
     const prev = cur.subtasks[idx - 1];
     setSubtasks(uid, cur, cur.subtasks.filter((x) => x.id !== id));
@@ -87,7 +98,7 @@ export function SubtaskList({ item, placeholder = "Add a step" }: { item: Item; 
               onToggle={(e) => toggle(item, s, e)}
               onCommit={(t) => commitTitle(s.id, t)}
               onEnter={() => insertAfter(s.id)}
-              onRemove={() => remove(s.id)}
+              onRemove={(text) => remove(s.id, text)}
               onDragEnd={() => {
                 dragging.current = false;
                 const cur = item;
@@ -138,7 +149,8 @@ function SubtaskRow({
   onToggle: (e: React.MouseEvent) => void;
   onCommit: (t: string) => void;
   onEnter: () => void;
-  onRemove: () => void;
+  /** called with the row's current text */
+  onRemove: (text: string) => void;
   onDragEnd: () => void;
 }) {
   const controls = useDragControls();
@@ -205,7 +217,7 @@ function SubtaskRow({
               onEnter();
             } else if (e.key === "Backspace" && !text) {
               e.preventDefault();
-              onRemove();
+              onRemove("");
             }
           }}
           placeholder="Untitled step"
@@ -222,7 +234,7 @@ function SubtaskRow({
           <GripVertical className="h-4 w-4" />
         </span>
         <button
-          onClick={onRemove}
+          onClick={() => onRemove(text)}
           aria-label="Remove step"
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-ink-3 opacity-60 hover:bg-hover hover:text-ink md:opacity-0 md:group-hover:opacity-100"
         >

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { deleteCourse, saveCourse, shortId, stopSeries } from "@/lib/actions";
 import { COLOR_KEYS, colorOf } from "@/lib/colors";
 import { addDays, dayKey } from "@/lib/dates";
-import { isVisible } from "@/lib/schedule";
+import { isVisible, meetingSummary } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ColorKey, Course, CourseLink, Meeting, TextbookKind } from "@/lib/types";
 import { DayPicker, Field, repeatSummary } from "./repeat-fields";
@@ -203,7 +203,20 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                       placeholder="Lecture"
                       className="ghost-input text-[14px] font-medium text-ink"
                     />
-                    <IconButton label="Remove time" onClick={() => set({ meetings: draft.meetings.filter((x) => x.id !== m.id) })}>
+                    <IconButton
+                      label="Remove time"
+                      onClick={async () => {
+                        const ok = await ui.confirm({
+                          title: `Remove ${m.label?.trim() || "this meeting time"}?`,
+                          body: meetingSummary(m),
+                          confirmLabel: "Remove",
+                        });
+                        if (!ok) return;
+                        // Functional update: the draft may have changed while the dialog was open.
+                        setDraft((d) => ({ ...d, meetings: d.meetings.filter((x) => x.id !== m.id) }));
+                        setDirty(true);
+                      }}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </IconButton>
                   </div>
@@ -328,10 +341,14 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                 </div>
                 <IconButton
                   label="Stop repeating"
-                  onClick={() =>
-                    confirm(`Stop “${s.title}” from repeating? Upcoming weeks you haven't started are removed.`) &&
-                    stopSeries(uid, s, dayKey(), items)
-                  }
+                  onClick={async () => {
+                    const ok = await ui.confirm({
+                      title: `Stop “${s.title}” from repeating?`,
+                      body: "Upcoming weeks you haven't started are removed. Past weeks stay.",
+                      confirmLabel: "Stop repeating",
+                    });
+                    if (ok) stopSeries(uid, s, dayKey(), items).catch(() => ui.toast("Couldn't save — check your connection"));
+                  }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </IconButton>
@@ -348,7 +365,12 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                 size="sm"
                 icon={<Trash2 className="h-4 w-4" />}
                 onClick={async () => {
-                  if (!confirm(`Delete ${course.name}? Its open tasks and weekly assignments go too.`)) return;
+                  const ok = await ui.confirm({
+                    title: `Delete ${course.name}?`,
+                    body: "Its open tasks and weekly assignments are deleted too. This can't be undone.",
+                    confirmLabel: "Delete class",
+                  });
+                  if (!ok) return;
                   await deleteCourse(uid, course, items, series);
                   onClose();
                 }}
@@ -404,6 +426,11 @@ function LinksEditor({ links, onChange }: { links: CourseLink[]; onChange: (link
   const ui = useUI();
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
+  // The confirm dialog is async, so removal reads the latest list rather than the one it was opened with.
+  const linksRef = useRef(links);
+  useEffect(() => {
+    linksRef.current = links;
+  });
 
   const add = () => {
     const href = normalizeUrl(url);
@@ -447,7 +474,14 @@ function LinksEditor({ links, onChange }: { links: CourseLink[]; onChange: (link
                       <div className="truncate text-[12px] text-ink-3">{l.title ? hostOf(l.url) : l.url}</div>
                     </div>
                   </a>
-                  <IconButton label={`Remove ${l.title || hostOf(l.url)}`} onClick={() => onChange(links.filter((x) => x.id !== l.id))} className="mr-1 shrink-0">
+                  <IconButton
+                    label={`Remove ${l.title || hostOf(l.url)}`}
+                    onClick={async () => {
+                      const ok = await ui.confirm({ title: `Remove “${l.title || hostOf(l.url)}”?`, body: l.url, confirmLabel: "Remove link" });
+                      if (ok) onChange(linksRef.current.filter((x) => x.id !== l.id));
+                    }}
+                    className="mr-1 shrink-0"
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
                   </IconButton>
                 </div>

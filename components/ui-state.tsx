@@ -3,6 +3,14 @@
 import { AnimatePresence, motion } from "motion/react";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { ItemKind } from "@/lib/types";
+import { Button, Sheet } from "./ui";
+
+export interface ConfirmOptions {
+  title: string;
+  body?: string;
+  /** label of the destructive button (default "Delete") */
+  confirmLabel?: string;
+}
 
 export interface NewItemDraft {
   kind: ItemKind;
@@ -30,6 +38,8 @@ interface UI {
   openRepeat: (id: string | null) => void;
   requestStart: (id: string | null) => void;
   toast: (text: string) => void;
+  /** Ask before anything is deleted. Resolves true only if the user confirms. */
+  confirm: (opts: ConfirmOptions) => Promise<boolean>;
 }
 
 const Ctx = createContext<UI | null>(null);
@@ -44,6 +54,22 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [startFor, requestStart] = useState<string | null>(null);
   const [repeatFor, openRepeat] = useState<string | null>(null);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
+  const [asking, setAsking] = useState<(ConfirmOptions & { resolve: (ok: boolean) => void }) | null>(null);
+
+  const confirm = useCallback(
+    (opts: ConfirmOptions) =>
+      new Promise<boolean>((resolve) =>
+        setAsking((prev) => {
+          prev?.resolve(false);
+          return { ...opts, resolve };
+        }),
+      ),
+    [],
+  );
+  const answer = (ok: boolean) => {
+    asking?.resolve(ok);
+    setAsking(null);
+  };
 
   const toast = useCallback((text: string) => {
     const id = Date.now() + Math.random();
@@ -70,13 +96,30 @@ export function UIProvider({ children }: { children: ReactNode }) {
       repeatFor,
       openRepeat,
       toast,
+      confirm,
     }),
-    [itemId, newItem, courseId, newCourse, importOpen, settingsOpen, startFor, repeatFor, toast],
+    [itemId, newItem, courseId, newCourse, importOpen, settingsOpen, startFor, repeatFor, toast, confirm],
   );
 
   return (
     <Ctx.Provider value={value}>
       {children}
+      <Sheet open={!!asking} onClose={() => answer(false)} mode="center" label={asking?.title || "Confirm"}>
+        {asking && (
+          <div className="p-6">
+            <h3 className="text-[17px] font-semibold text-ink">{asking.title}</h3>
+            {asking.body && <p className="mt-1 text-[13.5px] leading-relaxed text-ink-3">{asking.body}</p>}
+            <div className="mt-5 flex flex-col gap-2">
+              <Button variant="danger" size="lg" className="border border-[rgba(224,92,89,0.35)]" onClick={() => answer(true)}>
+                {asking.confirmLabel || "Delete"}
+              </Button>
+              <Button variant="ghost" onClick={() => answer(false)} autoFocus>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Sheet>
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(24px+var(--safe-bottom))] z-[95] flex flex-col items-center gap-2 px-4">
         <AnimatePresence>
           {toasts.map((t) => (

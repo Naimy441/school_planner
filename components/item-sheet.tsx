@@ -255,7 +255,14 @@ function ItemPage({ item }: { item: Item }) {
                 {isOpen && (
                   <MenuBtn
                     icon={<Archive />}
-                    onClick={() => {
+                    onClick={async () => {
+                      setMenu(false);
+                      const ok = await ui.confirm({
+                        title: `Archive “${item.title}”?`,
+                        body: "It leaves your lists. Nothing is lost, but it won't come back on its own.",
+                        confirmLabel: "Archive",
+                      });
+                      if (!ok) return;
                       patchItem(uid, item.id, { status: "archived" });
                       ui.openItem(null);
                       ui.toast("Let go — no guilt. It's archived.");
@@ -270,7 +277,8 @@ function ItemPage({ item }: { item: Item }) {
                   onClick={async () => {
                     setMenu(false);
                     if (repeating) return setAskDelete(true);
-                    if (!confirm(`Delete “${item.title}”?`)) return;
+                    const ok = await ui.confirm({ title: `Delete “${item.title}”?`, body: "Its steps and notes go with it. This can't be undone." });
+                    if (!ok) return;
                     if (timerHere && timer) await stopTimer(uid, timer);
                     await deleteItem(uid, item);
                     ui.openItem(null);
