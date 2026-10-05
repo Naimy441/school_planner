@@ -1,12 +1,16 @@
 {
-  "name": "school_planner",
+  "name": "planner",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "emulators": "firebase emulators:start --only auth,firestore",
+    "dev:emulator": "NEXT_PUBLIC_USE_EMULATOR=1 next dev",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "widget": "./widget/build.sh"
   },
   "dependencies": {
     "clsx": "^2.1.1",
