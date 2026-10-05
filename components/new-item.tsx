@@ -6,8 +6,8 @@ import { addDays, atTime, dayKey, fromLocalInput, parseDay, toLocalInput } from 
 import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
 import type { Course, ItemKind } from "@/lib/types";
-import { Field, RepeatFields, repeatOccurrences, type RepeatValue } from "./repeat-fields";
-import { Button, inputCls, Segmented, Sheet } from "./ui";
+import { Field, RepeatFields, repeatError, type RepeatValue } from "./repeat-fields";
+import { Button, inputCls, Segmented, Sheet, SwitchRow } from "./ui";
 import { useUI, type NewItemDraft } from "./ui-state";
 
 /** Last class day of the term, or ~14 weeks out. */
@@ -44,7 +44,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
     time: "23:59",
     start: today,
     end: termEnd(courseMap.get(draft.courseId || ""), today),
-    lateDays: 0,
+    lateOffsetMin: null,
   }));
   const [busy, setBusy] = useState(false);
 
@@ -59,7 +59,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
     setRepeat((r) => ({ ...r, end: termEnd(courseMap.get(id), today) }));
   };
 
-  const canSave = title.trim() && (!recurring || (courseId && repeatOccurrences(repeat).length > 0));
+  const canSave = title.trim() && (!recurring || (courseId && !repeatError(repeat)));
 
   const save = async () => {
     if (!canSave) return;
@@ -73,7 +73,8 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
           time: repeat.time,
           startDate: repeat.start,
           endDate: repeat.end,
-          lateDays: repeat.lateDays || null,
+          lateOffsetMin: repeat.lateOffsetMin,
+          lateDays: null,
           createdAt: Date.now(),
           active: true,
         });
@@ -136,10 +137,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
         </Field>
 
         {kind === "assignment" && (
-          <label className="flex cursor-pointer items-center justify-between rounded-lg bg-hover px-3 py-2.5">
-            <span className="text-[14px] text-ink">Repeats every week</span>
-            <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="h-4 w-4 accent-[#2383e2]" />
-          </label>
+          <SwitchRow label="Repeats every week" checked={recurring} onChange={setRecurring} />
         )}
 
         {kind === "assignment" && recurring ? (
@@ -159,10 +157,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
             )}
             {kind === "assignment" && (
               <>
-                <label className="flex cursor-pointer items-center justify-between rounded-lg bg-hover px-3 py-2.5">
-                  <span className="text-[14px] text-ink">Has a late deadline</span>
-                  <input type="checkbox" checked={hasLate} onChange={(e) => setHasLate(e.target.checked)} className="h-4 w-4 accent-[#2383e2]" />
-                </label>
+                <SwitchRow label="Accepts late work" checked={hasLate} onChange={setHasLate} />
                 {hasLate && (
                   <Field label="Late deadline">
                     <input type="datetime-local" value={late} onChange={(e) => setLate(e.target.value)} className={inputCls} />

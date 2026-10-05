@@ -5,11 +5,11 @@ import { BookOpen, Check as CheckIcon, Plus, Repeat, Trash2, X } from "lucide-re
 import { useMemo, useState } from "react";
 import { deleteCourse, saveCourse, shortId, stopSeries } from "@/lib/actions";
 import { COLOR_KEYS, colorOf } from "@/lib/colors";
-import { addDays, dayKey, WEEKDAYS } from "@/lib/dates";
+import { addDays, dayKey } from "@/lib/dates";
 import { isVisible } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ColorKey, Course, Meeting, TextbookKind } from "@/lib/types";
-import { DayPicker, Field } from "./repeat-fields";
+import { DayPicker, Field, repeatSummary } from "./repeat-fields";
 import { ItemRow } from "./rows";
 import { Bar, Button, cn, IconButton, inputCls, Segmented, Sheet } from "./ui";
 import { useUI } from "./ui-state";
@@ -286,8 +286,7 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14px] text-ink">{s.title}</div>
                   <div className="text-[12px] text-ink-3">
-                    Every {s.days.map((d) => WEEKDAYS[d]).join(", ")} · {s.time}
-                    {s.lateDays ? ` · ${s.lateDays}d late window` : ""}
+                    {repeatSummary(s)}
                   </div>
                 </div>
                 <IconButton

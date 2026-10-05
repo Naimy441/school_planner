@@ -7,7 +7,8 @@ import { dayKey, MIN } from "@/lib/dates";
 import { useStore } from "@/lib/store";
 import type { Item, Series } from "@/lib/types";
 import { termEnd } from "./new-item";
-import { RepeatFields, repeatOccurrences, type RepeatValue } from "./repeat-fields";
+import { lateOffsetOf } from "@/lib/schedule";
+import { RepeatFields, repeatError, type RepeatValue } from "./repeat-fields";
 import { Button, Sheet } from "./ui";
 import { useUI } from "./ui-state";
 
@@ -34,17 +35,17 @@ function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
   const today = dayKey();
   const [value, setValue] = useState<RepeatValue>(() =>
     series
-      ? { days: series.days, time: series.time, start: series.startDate, end: series.endDate, lateDays: series.lateDays || 0 }
+      ? { days: series.days, time: series.time, start: series.startDate, end: series.endDate, lateOffsetMin: lateOffsetOf(series) }
       : {
           days: [new Date(item.due).getDay()],
           time: hhmm(item.due),
           start: dayKey(item.due),
           end: termEnd(courseMap.get(item.courseId || ""), today),
-          lateDays: item.lateDue ? Math.max(0, Math.round((item.lateDue - item.due) / (1440 * MIN))) : 0,
+          lateOffsetMin: item.lateDue && item.lateDue > item.due ? Math.round((item.lateDue - item.due) / MIN) : null,
         },
   );
   const [busy, setBusy] = useState(false);
-  const valid = repeatOccurrences(value).length > 0;
+  const valid = !repeatError(value);
   const close = () => ui.openRepeat(null);
 
   const run = async (fn: () => Promise<unknown>, msg: string) => {
@@ -67,7 +68,8 @@ function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
     time: value.time,
     startDate: value.start,
     endDate: value.end,
-    lateDays: value.lateDays || null,
+    lateOffsetMin: value.lateOffsetMin,
+    lateDays: null,
     createdAt: series?.createdAt || Date.now(),
     active: true,
   });

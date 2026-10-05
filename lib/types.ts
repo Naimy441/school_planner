@@ -108,6 +108,9 @@ export interface Series {
   time: string;
   startDate: string;
   endDate: string;
+  /** late deadline = each due time + this many minutes (null = no late work) */
+  lateOffsetMin?: number | null;
+  /** legacy: whole days of late window (read-only, superseded by lateOffsetMin) */
   lateDays?: number | null;
   createdAt: number;
   active: boolean;

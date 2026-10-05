@@ -77,6 +77,35 @@ export function IconButton({
   );
 }
 
+export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn("focus-ring relative h-[26px] w-[44px] shrink-0 rounded-full transition-colors", checked ? "bg-accent" : "bg-white/15")}
+    >
+      <motion.span
+        className="absolute top-[3px] h-5 w-5 rounded-full bg-white shadow"
+        animate={{ left: checked ? 21 : 3 }}
+        transition={spring}
+      />
+    </button>
+  );
+}
+
+/** A label + switch row. */
+export function SwitchRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-hover px-3 py-2.5">
+      <span className="text-[14px] text-ink">{label}</span>
+      <Switch checked={checked} onChange={onChange} label={label} />
+    </div>
+  );
+}
+
 // ---------- Tags ----------
 
 export function Tag({ color, children, className }: { color?: string; children: ReactNode; className?: string }) {

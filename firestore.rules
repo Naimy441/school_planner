@@ -95,7 +95,8 @@ service cloud.firestore {
           && reqString('courseId', 128)
           && data().days is list && data().days.size() <= 7
           && reqString('time', 5)
-          && optNumber('lateDays');
+          && optNumber('lateDays')
+          && optNumber('lateOffsetMin');
       }
 
       match /attendance/{attId} {

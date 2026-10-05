@@ -133,14 +133,21 @@ export function prepValid(item: Item, now = Date.now()) {
 
 // ---------- materialisation ----------
 
+/** Minutes after each due time that late work is accepted, or null. */
+export function lateOffsetOf(s: Pick<Series, "lateOffsetMin" | "lateDays">) {
+  if (s.lateOffsetMin != null) return s.lateOffsetMin > 0 ? s.lateOffsetMin : null;
+  return s.lateDays ? s.lateDays * 1440 : null;
+}
+
 export function seriesOccurrences(s: Series, fromKey: string, toKey: string) {
+  const offset = lateOffsetOf(s);
   const out: { date: string; due: number; lateDue: number | null }[] = [];
   const from = fromKey > s.startDate ? fromKey : s.startDate;
   const to = toKey < s.endDate ? toKey : s.endDate;
   for (let d = from; d <= to; d = addDays(d, 1)) {
     if (!s.days.includes(parseDay(d).getDay())) continue;
     const due = atTime(d, s.time);
-    out.push({ date: d, due, lateDue: s.lateDays ? due + s.lateDays * DAY : null });
+    out.push({ date: d, due, lateDue: offset ? due + offset * 60_000 : null });
   }
   return out;
 }
