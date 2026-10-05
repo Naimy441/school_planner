@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { createItem, saveSeries } from "@/lib/actions";
-import { addDays, atTime, dayKey, fromLocalInput, parseDay, toLocalInput } from "@/lib/dates";
+import { addDays, atTime, dayKey } from "@/lib/dates";
+import { seriesItemId } from "@/lib/schedule";
 import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
 import type { Course, ItemKind } from "@/lib/types";
-import { Field, RepeatFields, repeatError, type RepeatValue } from "./repeat-fields";
-import { Button, inputCls, Segmented, Sheet, SwitchRow } from "./ui";
+import { Field, ScheduleFields, scheduleError, toSeriesRule, type Schedule } from "./repeat-fields";
+import { Button, inputCls, Segmented, Sheet } from "./ui";
 import { useUI, type NewItemDraft } from "./ui-state";
 
 /** Last class day of the term, or ~14 weeks out. */
@@ -27,67 +28,63 @@ export function NewItemSheet() {
   );
 }
 
+function defaultDue(kind: ItemKind, today: string) {
+  return kind === "exam" ? atTime(addDays(today, 7), "09:00") : atTime(addDays(today, 1), "23:59");
+}
+
 function NewItemForm({ draft }: { draft: NewItemDraft }) {
   const ui = useUI();
   const { uid, courses, courseMap } = useStore();
   const [kind, setKind] = useState<Exclude<ItemKind, "textbook">>(draft.kind === "textbook" ? "task" : draft.kind);
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState(draft.courseId || "");
-  const today = dayKey();
-  const [due, setDue] = useState(() => toLocalInput(draft.kind === "exam" ? atTime(addDays(today, 7), "09:00") : atTime(addDays(today, 1), "23:59")));
-  const [hasLate, setHasLate] = useState(false);
-  const [late, setLate] = useState(() => toLocalInput(atTime(addDays(today, 4), "23:59")));
   const [where, setWhere] = useState("");
-  const [recurring, setRecurring] = useState(!!draft.recurring);
-  const [repeat, setRepeat] = useState<RepeatValue>(() => ({
-    days: [parseDay(today).getDay()],
-    time: "23:59",
-    start: today,
-    end: termEnd(courseMap.get(draft.courseId || ""), today),
-    lateOffsetMin: null,
+  const today = dayKey();
+  const [schedule, setSchedule] = useState<Schedule>(() => ({
+    due: defaultDue(draft.kind, today),
+    repeat: !!draft.recurring,
+    until: termEnd(courseMap.get(draft.courseId || ""), today),
+    late: null,
   }));
   const [busy, setBusy] = useState(false);
+  const isAssignment = kind === "assignment";
+  const weekly = isAssignment && schedule.repeat;
 
   const changeKind = (k: typeof kind) => {
     setKind(k);
-    setDue(toLocalInput(k === "exam" ? atTime(addDays(today, 7), "09:00") : atTime(addDays(today, 1), "23:59")));
+    setSchedule((s) => ({ ...s, due: defaultDue(k, today), late: null, repeat: k === "assignment" && s.repeat }));
   };
 
-  // default series range to the class's term
+  // default the repeat range to the class's term
   const changeCourse = (id: string) => {
     setCourseId(id);
-    setRepeat((r) => ({ ...r, end: termEnd(courseMap.get(id), today) }));
+    setSchedule((s) => ({ ...s, until: termEnd(courseMap.get(id), today) }));
   };
 
-  const canSave = title.trim() && (!recurring || (courseId && !repeatError(repeat)));
+  const canSave = !!title.trim() && !scheduleError(schedule) && (!weekly || !!courseId);
 
   const save = async () => {
     if (!canSave) return;
     setBusy(true);
     try {
-      if (kind === "assignment" && recurring) {
-        await saveSeries(uid, {
+      if (weekly) {
+        const id = await saveSeries(uid, {
           courseId,
           title: title.trim(),
-          days: repeat.days,
-          time: repeat.time,
-          startDate: repeat.start,
-          endDate: repeat.end,
-          lateOffsetMin: repeat.lateOffsetMin,
-          lateDays: null,
+          ...toSeriesRule(schedule),
           createdAt: Date.now(),
           active: true,
         });
-        ui.toast("Weekly assignment added — upcoming ones will appear automatically");
         ui.openNewItem(null);
+        // open the first week's copy (generated automatically) to break it down
+        ui.openItem(seriesItemId(id, dayKey(schedule.due)));
       } else {
-        const dueMs = fromLocalInput(due);
         const id = createItem(uid, {
           kind,
           title: title.trim(),
           courseId: courseId || null,
-          due: dueMs,
-          lateDue: kind === "assignment" && hasLate ? fromLocalInput(late) : null,
+          due: schedule.due,
+          lateDue: isAssignment ? schedule.late : null,
           where: kind === "exam" ? where.trim() || undefined : undefined,
         });
         ui.openNewItem(null);
@@ -121,7 +118,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder={kind === "exam" ? "Midterm 1" : kind === "assignment" ? "Problem set 3" : "Email the TA"}
+        placeholder={kind === "exam" ? "Midterm 1" : isAssignment ? "Problem set 3" : "Email the TA"}
         className="ghost-input mt-5 text-[22px] font-semibold text-ink"
       />
       <div className="mt-5 flex flex-col gap-4">
@@ -136,36 +133,19 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
           </select>
         </Field>
 
-        {kind === "assignment" && (
-          <SwitchRow label="Repeats every week" checked={recurring} onChange={setRecurring} />
-        )}
+        <ScheduleFields
+          value={schedule}
+          onChange={setSchedule}
+          dueLabel={kind === "exam" ? "Exam" : "Due"}
+          allowRepeat={isAssignment}
+          allowLate={isAssignment}
+        />
+        {weekly && !courseId && <p className="text-[12.5px] text-warn">Pick a class for weekly assignments.</p>}
 
-        {kind === "assignment" && recurring ? (
-          <>
-            <RepeatFields value={repeat} onChange={setRepeat} />
-            {!courseId && <p className="text-[12.5px] text-warn">Pick a class for weekly assignments.</p>}
-          </>
-        ) : (
-          <>
-            <Field label={kind === "exam" ? "Exam date & time" : "Due"}>
-              <input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className={inputCls} />
-            </Field>
-            {kind === "exam" && (
-              <Field label="Room">
-                <input value={where} onChange={(e) => setWhere(e.target.value)} placeholder="Hall B" className={inputCls} />
-              </Field>
-            )}
-            {kind === "assignment" && (
-              <>
-                <SwitchRow label="Accepts late work" checked={hasLate} onChange={setHasLate} />
-                {hasLate && (
-                  <Field label="Late deadline">
-                    <input type="datetime-local" value={late} onChange={(e) => setLate(e.target.value)} className={inputCls} />
-                  </Field>
-                )}
-              </>
-            )}
-          </>
+        {kind === "exam" && (
+          <Field label="Room">
+            <input value={where} onChange={(e) => setWhere(e.target.value)} placeholder="Hall B" className={inputCls} />
+          </Field>
         )}
       </div>
       <div className="mt-6 flex justify-end gap-2">
@@ -173,12 +153,9 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={!canSave || busy}>
-          {kind === "assignment" && recurring ? "Add weekly" : "Create"}
+          Create
         </Button>
       </div>
-      {kind !== "task" && !recurring && (
-        <p className="mt-3 text-right text-[12px] text-ink-3">Next, you&apos;ll break it into small steps.</p>
-      )}
     </form>
   );
 }

@@ -2,13 +2,12 @@
 
 import { Repeat } from "lucide-react";
 import { useState } from "react";
-import { makeRepeating, stopSeries, updateSeries } from "@/lib/actions";
-import { dayKey, MIN } from "@/lib/dates";
+import { makeRepeating, patchItem, stopSeries, updateSeries } from "@/lib/actions";
+import { dayKey } from "@/lib/dates";
 import { useStore } from "@/lib/store";
 import type { Item, Series } from "@/lib/types";
 import { termEnd } from "./new-item";
-import { lateOffsetOf } from "@/lib/schedule";
-import { RepeatFields, repeatError, type RepeatValue } from "./repeat-fields";
+import { nextOfSeries, ScheduleFields, scheduleError, toSeriesRule, type Schedule } from "./repeat-fields";
 import { Button, Sheet } from "./ui";
 import { useUI } from "./ui-state";
 
@@ -24,28 +23,19 @@ export function RepeatEditorHost() {
   );
 }
 
-function hhmm(t: number) {
-  const d = new Date(t);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
   const ui = useUI();
   const { uid, items, courseMap } = useStore();
   const today = dayKey();
-  const [value, setValue] = useState<RepeatValue>(() =>
-    series
-      ? { days: series.days, time: series.time, start: series.startDate, end: series.endDate, lateOffsetMin: lateOffsetOf(series) }
-      : {
-          days: [new Date(item.due).getDay()],
-          time: hhmm(item.due),
-          start: dayKey(item.due),
-          end: termEnd(courseMap.get(item.courseId || ""), today),
-          lateOffsetMin: item.lateDue && item.lateDue > item.due ? Math.round((item.lateDue - item.due) / MIN) : null,
-        },
-  );
+  const [value, setValue] = useState<Schedule>(() => {
+    if (series) {
+      const next = nextOfSeries(series);
+      return { due: next?.due ?? item.due, late: next?.lateDue ?? null, repeat: true, until: series.endDate };
+    }
+    return { due: item.due, late: item.lateDue ?? null, repeat: true, until: termEnd(courseMap.get(item.courseId || ""), today) };
+  });
   const [busy, setBusy] = useState(false);
-  const valid = !repeatError(value);
+  const valid = !scheduleError(value);
   const close = () => ui.openRepeat(null);
 
   const run = async (fn: () => Promise<unknown>, msg: string) => {
@@ -61,18 +51,21 @@ function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
     }
   };
 
-  const next = (): Omit<Series, "id"> => ({
+  const rule = (): Omit<Series, "id"> => ({
     courseId: item.courseId || "",
     title: item.title,
-    days: value.days,
-    time: value.time,
-    startDate: value.start,
-    endDate: value.end,
-    lateOffsetMin: value.lateOffsetMin,
-    lateDays: null,
+    ...toSeriesRule(value),
     createdAt: series?.createdAt || Date.now(),
     active: true,
   });
+
+  const makeWeekly = async () => {
+    // this assignment becomes the first week, so it moves to the chosen date too
+    if (value.due !== item.due || (value.late ?? null) !== (item.lateDue ?? null)) {
+      await patchItem(uid, item.id, { due: value.due, lateDue: value.late });
+    }
+    await makeRepeating(uid, { ...item, due: value.due }, rule());
+  };
 
   return (
     <div className="p-6">
@@ -81,7 +74,7 @@ function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
           <Repeat className="h-4 w-4" />
         </span>
         <div>
-          <h3 className="text-[17px] font-semibold text-ink">{series ? "Repeats weekly" : "Make it weekly"}</h3>
+          <h3 className="text-[17px] font-semibold text-ink">{series ? "Weekly" : "Make it weekly"}</h3>
           <p className="text-[12.5px] text-ink-3">{item.title}</p>
         </div>
       </div>
@@ -90,12 +83,8 @@ function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
         <p className="rounded-lg bg-warn-soft px-3 py-2.5 text-[13.5px] text-[#f0c9a8]">Pick a class for this assignment first — weekly ones belong to a class.</p>
       ) : (
         <div className="flex flex-col gap-4">
-          <RepeatFields value={value} onChange={setValue} />
-          <p className="text-[12.5px] leading-relaxed text-ink-3">
-            {series
-              ? "Changes apply to upcoming weeks. Weeks you've already started keep their steps and notes."
-              : "This one stays as this week's copy; the next ones appear automatically."}
-          </p>
+          <ScheduleFields value={value} onChange={setValue} dueLabel={series ? "Next due" : "Due"} allowRepeat allowLate fixedRepeat />
+          {series && <p className="text-[12.5px] text-ink-3">Changes apply from the next one on. Weeks you&apos;ve started are kept.</p>}
         </div>
       )}
 
@@ -120,10 +109,7 @@ function RepeatEditor({ item, series }: { item: Item; series?: Series }) {
             variant="primary"
             disabled={busy || !valid || !item.courseId}
             onClick={() =>
-              run(
-                () => (series ? updateSeries(uid, series, next(), items) : makeRepeating(uid, item, next())),
-                series ? "Updated upcoming weeks" : "Now repeats weekly",
-              )
+              run(() => (series ? updateSeries(uid, series, rule(), items) : makeWeekly()), series ? "Updated upcoming weeks" : "Now repeats weekly")
             }
           >
             {series ? "Save" : "Make weekly"}

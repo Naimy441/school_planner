@@ -6,15 +6,6 @@ import { lateOffsetOf, seriesOccurrences } from "@/lib/schedule";
 import type { Series } from "@/lib/types";
 import { cn, inputCls, SwitchRow } from "./ui";
 
-export interface RepeatValue {
-  days: number[];
-  time: string;
-  start: string;
-  end: string;
-  /** minutes after each due time that late work is accepted; null = none */
-  lateOffsetMin: number | null;
-}
-
 export function DayPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
   return (
     <div className="flex gap-1">
@@ -49,97 +40,105 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 const hhmm = (t: number) => format(t, "HH:mm");
-export const when = (t: number) => `${format(t, "EEE, MMM d")} · ${fmtTime(t)}`;
 
-export function repeatOccurrences(v: RepeatValue) {
-  if (!v.days.length || !v.time || !v.start || !v.end || v.start > v.end) return [];
-  return seriesOccurrences(
-    { id: "", courseId: "", title: "", days: v.days, time: v.time, startDate: v.start, endDate: v.end, lateOffsetMin: v.lateOffsetMin, createdAt: 0, active: true },
-    v.start,
-    v.end,
+/** Date + time side by side, as one value in ms. */
+export function DateTimeField({ label, value, onChange }: { label: string; value: number; onChange: (t: number) => void }) {
+  const set = (date: string, time: string) => date && time && onChange(atTime(date, time));
+  return (
+    <div>
+      <div className="mb-1.5 text-[12.5px] font-medium text-ink-2">{label}</div>
+      <div className="grid grid-cols-2 gap-2">
+        <input type="date" aria-label={`${label} date`} value={dayKey(value)} onChange={(e) => set(e.target.value, hhmm(value))} className={inputCls} />
+        <input type="time" aria-label={`${label} time`} value={hhmm(value)} onChange={(e) => set(dayKey(value), e.target.value)} className={inputCls} />
+      </div>
+    </div>
   );
 }
 
-/** The next upcoming due date (or the first, if they're all in the past). */
-export function nextOccurrence(v: RepeatValue) {
-  const occ = repeatOccurrences(v);
-  return occ.find((o) => o.due > Date.now()) || occ[0];
+export interface Schedule {
+  /** the (first) due time, ms */
+  due: number;
+  repeat: boolean;
+  /** last day it can repeat on, YYYY-MM-DD */
+  until: string;
+  /** late deadline for this (first) one, ms — later weeks keep the same gap */
+  late: number | null;
 }
 
-export function repeatError(v: RepeatValue) {
-  if (!v.days.length) return "Pick at least one day.";
-  if (!repeatOccurrences(v).length) return "No due dates fall between those dates.";
-  if (v.lateOffsetMin != null && v.lateOffsetMin <= 0) return "The late deadline has to be after the due time.";
+export function scheduleError(s: Schedule) {
+  if (Number.isNaN(s.due)) return "Pick a due date.";
+  if (s.late != null && s.late <= s.due) return "The late deadline has to be after the due time.";
+  if (s.repeat && (!s.until || s.until < dayKey(s.due))) return "“Until” has to be on or after the first due date.";
   return null;
 }
 
-export function RepeatFields({ value, onChange }: { value: RepeatValue; onChange: (v: RepeatValue) => void }) {
-  const set = (patch: Partial<RepeatValue>) => onChange({ ...value, ...patch });
-  const next = nextOccurrence(value);
-  const late = next && value.lateOffsetMin != null ? next.due + value.lateOffsetMin * 60_000 : null;
-  const error = repeatError(value);
-
-  // Editing the late deadline of the next one sets the gap used for every week.
-  const setLate = (date: string, time: string) => {
-    if (!next || !date || !time) return;
-    set({ lateOffsetMin: Math.round((atTime(date, time) - next.due) / 60_000) });
+/** Weekly rule fields for a schedule: same weekday and time as the first due date. */
+export function toSeriesRule(s: Schedule) {
+  return {
+    days: [new Date(s.due).getDay()],
+    time: hhmm(s.due),
+    startDate: dayKey(s.due),
+    endDate: s.until,
+    lateOffsetMin: s.late != null ? Math.round((s.late - s.due) / 60_000) : null,
+    lateDays: null,
   };
+}
+
+/** Due date (+ optional weekly repeat and late deadline). */
+export function ScheduleFields({
+  value,
+  onChange,
+  dueLabel = "Due",
+  allowRepeat = false,
+  allowLate = false,
+  fixedRepeat = false,
+}: {
+  value: Schedule;
+  onChange: (s: Schedule) => void;
+  dueLabel?: string;
+  allowRepeat?: boolean;
+  allowLate?: boolean;
+  /** editing an existing weekly assignment: no on/off switch */
+  fixedRepeat?: boolean;
+}) {
+  const set = (patch: Partial<Schedule>) => onChange({ ...value, ...patch });
+  const error = scheduleError(value);
+
+  // Moving the due date carries the late deadline along with it.
+  const setDue = (due: number) => set({ due, late: value.late != null ? due + (value.late - value.due) : null });
 
   return (
     <>
-      <Field label="Due every">
-        <DayPicker value={value.days} onChange={(days) => set({ days })} />
-      </Field>
-      <Field label="Due at">
-        <input type="time" value={value.time} onChange={(e) => set({ time: e.target.value })} className={inputCls} />
-      </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Starting">
-          <input type="date" value={value.start} onChange={(e) => set({ start: e.target.value })} className={inputCls} />
-        </Field>
-        <Field label="Until">
-          <input type="date" value={value.end} onChange={(e) => set({ end: e.target.value })} className={inputCls} />
-        </Field>
-      </div>
+      <DateTimeField label={dueLabel} value={value.due} onChange={setDue} />
 
-      <SwitchRow
-        label="Accepts late work"
-        checked={value.lateOffsetMin != null}
-        onChange={(on) => set({ lateOffsetMin: on ? 3 * 1440 : null })}
-      />
-      {late != null && (
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Late deadline">
-            <input type="date" value={dayKey(late)} onChange={(e) => setLate(e.target.value, hhmm(late))} className={inputCls} />
-          </Field>
-          <Field label="at">
-            <input type="time" value={hhmm(late)} onChange={(e) => setLate(dayKey(late), e.target.value)} className={inputCls} />
-          </Field>
-        </div>
+      {allowRepeat && !fixedRepeat && <SwitchRow label="Repeats every week" checked={value.repeat} onChange={(repeat) => set({ repeat })} />}
+      {allowRepeat && value.repeat && (
+        <Field label="Until" hint={`Every ${format(value.due, "EEEE")} at ${fmtTime(value.due)}`}>
+          <input type="date" value={value.until} onChange={(e) => set({ until: e.target.value })} className={inputCls} />
+        </Field>
       )}
 
-      {error ? (
-        <p className="text-[12.5px] text-warn">{error}</p>
-      ) : (
-        next && (
-          <div className="rounded-lg border border-line bg-app/60 px-3 py-2.5 text-[13.5px]">
-            <div className="flex justify-between gap-3">
-              <span className="text-ink-3">Next due</span>
-              <span className="text-ink">{when(next.due)}</span>
-            </div>
-            {late != null && (
-              <div className="mt-1 flex justify-between gap-3">
-                <span className="text-ink-3">Late deadline</span>
-                <span className="text-ink">{when(late)}</span>
-              </div>
-            )}
-          </div>
-        )
+      {allowLate && (
+        <SwitchRow
+          label="Accepts late work"
+          checked={value.late != null}
+          onChange={(on) => set({ late: on ? value.due + 3 * 86_400_000 : null })}
+        />
       )}
+      {allowLate && value.late != null && (
+        <DateTimeField
+          label={!value.repeat ? "Late deadline" : fixedRepeat ? "Late deadline (for the next one)" : "Late deadline (for this first one)"}
+          value={value.late}
+          onChange={(late) => set({ late })}
+        />
+      )}
+
+      {error && <p className="text-[12.5px] text-warn">{error}</p>}
     </>
   );
 }
 
+/** "Every Mon · 11:59 PM · late until Thu 5 PM" */
 export function repeatSummary(s: Series) {
   const days = s.days.map((d) => WEEKDAYS[d]).join(", ");
   const offset = lateOffsetOf(s);
@@ -149,4 +148,12 @@ export function repeatSummary(s: Series) {
     if (occ?.lateDue) late = ` · late until ${format(occ.lateDue, "EEE")} ${fmtTime(occ.lateDue)}`;
   }
   return `Every ${days} · ${fmtTime(s.time)}${late}`;
+}
+
+/** The next upcoming occurrence of a weekly rule (or its last one). */
+export function nextOfSeries(s: Series) {
+  const upcoming = seriesOccurrences(s, dayKey(), s.endDate);
+  if (upcoming.length) return upcoming.find((o) => o.due > Date.now()) || upcoming[0];
+  const all = seriesOccurrences(s, s.startDate, s.endDate);
+  return all[all.length - 1];
 }
