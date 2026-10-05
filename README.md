@@ -14,6 +14,8 @@ One screen: **Home** has what to do next, today and the week ahead, your classes
 - **Priority nudge** — start something that isn't due first and you get a kind heads-up with a one-tap switch.
 - **Focus timer** — 10/3, 20/10, 25/5, 50/10, 1h/15, 2h/30 or custom, adjustable mid-session. Shows only the current and next step, and you can add steps as you go. The timer lives in Firestore, so the phone, the laptop and the menu bar all show the same countdown. Phase changes are transactional, so several open devices never double-count.
 - **Class time** — while a class is starting or in session, the app goes full-screen until you tap "I'm in class". Classes that ended while the app was closed get a quick "did you make it?" check-in. Attendance is tracked per class.
+- **Prayer check-ins** — turn on in Settings and share your location once; prayer times are calculated on the device (choose the calculation method and Asr timing). While it's a prayer's time the app asks whether you've prayed (with a 15-minute snooze), and afterwards it asks about any that ended unanswered. Prayed / missed / excused are tracked, with on-time rate and a week grid in Progress.
+- **Bedtime reminder** — set a bedtime and wake-up time in Settings; opening the app in between gets a gentle nudge to go to sleep.
 - **Progress** (bottom of Home) — points, levels, a daily goal ring, streaks, a 14-day focus chart, a 16-week activity heatmap, and attendance rates.
 
 ## Stack

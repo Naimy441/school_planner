@@ -55,6 +55,8 @@ service cloud.firestore {
         && optNumber('itemsDone')
         && optNumber('classesAttended')
         && optNumber('classesMissed')
+        && optNumber('prayersPrayed')
+        && optNumber('prayersMissed')
         && optString('displayName', 200)
         && (!('settings' in data()) || data().settings is map);
 
@@ -106,6 +108,16 @@ service cloud.firestore {
           && fieldsWithin(12)
           && reqString('courseId', 128)
           && data().status in ['attended', 'missed', 'skipped'];
+      }
+
+      // One doc per answered prayer check-in, id `${date}_${prayer}`.
+      match /prayers/{prayerId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && fieldsWithin(10)
+          && reqString('date', 10)
+          && data().prayer in ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']
+          && data().status in ['prayed', 'missed', 'excused'];
       }
 
       match /days/{dayKey} {

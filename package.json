@@ -13,6 +13,7 @@
     "widget": "./widget/build.sh"
   },
   "dependencies": {
+    "adhan": "^4.4.6",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "firebase": "^12.19.0",

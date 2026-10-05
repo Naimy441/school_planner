@@ -13,7 +13,7 @@ import {
   textbookDates,
   textbookItemId,
 } from "./schedule";
-import type { Attendance, ClassSession, Course, DayStat, Item, Profile, Series, Settings, TimerState } from "./types";
+import type { Attendance, ClassSession, Course, DayStat, Item, PrayerLog, Profile, Series, Settings, TimerState } from "./types";
 
 export const DEFAULT_SETTINGS: Settings = { workMin: 25, breakMin: 5, sound: true, dailyGoal: 150 };
 
@@ -44,6 +44,10 @@ interface Store {
   series: Series[];
   attendance: Map<string, Attendance>;
   days: Map<string, DayStat>;
+  /** answered prayer check-ins from the last 60 days, by `${date}_${prayer}` */
+  prayers: Map<string, PrayerLog>;
+  /** the prayer log has arrived from the server (kept apart from `ready` so it never blocks the app) */
+  prayersReady: boolean;
   timer: TimerState | null;
   /** class sessions from a week ago to two weeks out */
   sessions: ClassSession[];
@@ -66,6 +70,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [series, setSeries] = useState<Series[]>([]);
   const [attendanceList, setAttendance] = useState<Attendance[]>([]);
   const [dayList, setDays] = useState<DayStat[]>([]);
+  const [prayerList, setPrayers] = useState<PrayerLog[]>([]);
   const [timer, setTimer] = useState<TimerState | null>(null);
   const [serverSynced, setServerSynced] = useState<Record<string, boolean>>({});
   const [now, setNow] = useState(() => Date.now());
@@ -132,6 +137,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSnapshot(query(collection(d, ...base, "days"), where("date", ">=", dayKey(Date.now() - 180 * DAY))), (s) =>
         setDays(docsOf<DayStat & { id: string }>(s).map((x) => ({ ...x, date: x.date || x.id }))),
       ),
+      onSnapshot(
+        query(collection(d, ...base, "prayers"), where("date", ">=", dayKey(Date.now() - 60 * DAY))),
+        { includeMetadataChanges: true },
+        (s) => {
+          setPrayers(docsOf<PrayerLog>(s));
+          mark("prayers")(s.metadata.fromCache);
+        },
+        () => {},
+      ),
       onSnapshot(doc(d, ...base, "state", "timer"), (s) => setTimer((s.data() as TimerState) || null)),
     ];
     return () => {
@@ -145,6 +159,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSeries([]);
       setAttendance([]);
       setDays([]);
+      setPrayers([]);
       setTimer(null);
       setProfile(EMPTY_PROFILE);
     };
@@ -160,6 +175,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const courseMap = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
   const attendance = useMemo(() => new Map(attendanceList.map((a) => [a.id, a])), [attendanceList]);
   const days = useMemo(() => new Map(dayList.map((d) => [d.date, d])), [dayList]);
+  const prayers = useMemo(() => new Map(prayerList.map((p) => [p.id, p])), [prayerList]);
   const today = dayKey(now);
   const sessions = useMemo(
     () => sessionsBetween(courses, addDays(today, -7), addDays(today, 14)),
@@ -188,6 +204,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     series,
     attendance,
     days,
+    prayers,
+    prayersReady: !!uid && !!serverSynced.prayers,
     timer,
     sessions,
   };

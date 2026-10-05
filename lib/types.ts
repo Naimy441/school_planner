@@ -153,11 +153,46 @@ export interface TimerState {
   updatedAt: number;
 }
 
+export type PrayerName = "fajr" | "dhuhr" | "asr" | "maghrib" | "isha";
+/** "excused" answers the check-in without counting either way. */
+export type PrayerStatus = "prayed" | "missed" | "excused";
+
+export interface PrayerSettings {
+  enabled: boolean;
+  lat?: number;
+  lng?: number;
+  /** adhan calculation method key, e.g. "NorthAmerica" */
+  method: string;
+  madhab: "shafi" | "hanafi";
+  /** when tracking was turned on (ms) — nothing earlier is asked about */
+  since?: number;
+}
+
+export interface SleepSettings {
+  enabled: boolean;
+  /** "HH:mm" local */
+  bed: string;
+  wake: string;
+}
+
 export interface Settings {
   workMin: number;
   breakMin: number;
   sound: boolean;
   dailyGoal: number;
+  prayer?: PrayerSettings;
+  sleep?: SleepSettings;
+}
+
+/** One answered prayer check-in; id is `${date}_${prayer}`. */
+export interface PrayerLog {
+  id: string;
+  date: string;
+  prayer: PrayerName;
+  status: PrayerStatus;
+  /** answered while it was still that prayer's time */
+  onTime: boolean;
+  at: number;
 }
 
 export interface Profile {
@@ -168,6 +203,8 @@ export interface Profile {
   itemsDone: number;
   classesAttended: number;
   classesMissed: number;
+  prayersPrayed?: number;
+  prayersMissed?: number;
   settings?: Partial<Settings>;
   createdAt?: number;
 }

@@ -9,6 +9,7 @@ import { ItemSheetHost } from "@/components/item-sheet";
 import { Login, Private } from "@/components/login";
 import { Logo } from "@/components/logo";
 import { NewItemSheet } from "@/components/new-item";
+import { PrayerCheck, SleepReminder } from "@/components/prayer";
 import { RepeatEditorHost } from "@/components/repeat-editor";
 import { SettingsSheet } from "@/components/settings-sheet";
 import { AppShell } from "@/components/shell";
@@ -47,6 +48,8 @@ function Gate({ children }: { children: React.ReactNode }) {
           <SettingsSheet />
           <StartFlow />
           <AttendancePrompt />
+          <SleepReminder />
+          <PrayerCheck />
           <WrapUpPrompt />
           <ClassGate />
           <CelebrationLayer />

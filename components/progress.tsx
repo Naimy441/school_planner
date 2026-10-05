@@ -6,9 +6,11 @@ import { useMemo } from "react";
 import { colorOf } from "@/lib/colors";
 import { addDays, dayKey, dueLabel, fmtDuration, parseDay, WEEKDAYS_SHORT } from "@/lib/dates";
 import { levelInfo, levelTitle } from "@/lib/points";
+import { PRAYER_LABEL, PRAYERS, prayerId } from "@/lib/prayer";
 import { streakOf } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import { format } from "date-fns";
+import { PRAYER_ICON } from "./prayer";
 import { AnimatedNumber, Bar, Card, Dot, Ring, SectionTitle } from "./ui";
 import { useUI } from "./ui-state";
 
@@ -143,6 +145,8 @@ export function ProgressSection() {
         </Card>
       </section>
 
+      <PrayerStats />
+
       {/* attendance */}
       <section className="mt-6">
         <SectionTitle>Attendance</SectionTitle>
@@ -207,5 +211,118 @@ function Stat({ icon, label, value, text }: { icon: React.ReactNode; label: stri
       </div>
       <div className="mt-1.5 text-[24px] font-bold text-ink">{text ?? <AnimatedNumber value={value || 0} />}</div>
     </Card>
+  );
+}
+
+/** Prayer check-ins: the last 30 days at a glance and a week grid (rows = prayers, columns = days). */
+function PrayerStats() {
+  const { prayers, profile, settings, now } = useStore();
+  const today = dayKey(now);
+  const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(today, i - 6)), [today]);
+
+  const stats = useMemo(() => {
+    const from = addDays(today, -29);
+    let prayed = 0;
+    let missed = 0;
+    let onTime = 0;
+    for (const p of prayers.values()) {
+      if (p.date < from) continue;
+      if (p.status === "prayed") {
+        prayed++;
+        if (p.onTime) onTime++;
+      } else if (p.status === "missed") missed++;
+    }
+    // Days in a row with all five prayed (or excused); today only counts once it's complete.
+    const full = (d: string) => PRAYERS.every((n) => ["prayed", "excused"].includes(prayers.get(prayerId(d, n))?.status || ""));
+    let streak = 0;
+    let d = full(today) ? today : addDays(today, -1);
+    while (full(d)) {
+      streak++;
+      d = addDays(d, -1);
+    }
+    return { prayed, missed, onTime, streak };
+  }, [prayers, today]);
+
+  if (!settings.prayer?.enabled && !prayers.size) return null;
+  const rate = stats.prayed + stats.missed ? stats.prayed / (stats.prayed + stats.missed) : 0;
+
+  return (
+    <section className="mt-6">
+      <SectionTitle>Prayers</SectionTitle>
+      <Card className="p-4">
+        <div className="flex items-center gap-4">
+          <Ring value={rate} size={64} stroke={6} color="var(--good)">
+            <span className="text-[15px] font-bold text-ink">{stats.prayed + stats.missed ? Math.round(rate * 100) : "–"}</span>
+          </Ring>
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold text-ink">{stats.prayed} prayed · last 30 days</div>
+            <div className="text-[12.5px] text-ink-3">
+              {[
+                stats.prayed > 0 && `${Math.round((stats.onTime / stats.prayed) * 100)}% on time`,
+                stats.streak > 0 && `${stats.streak} full day${stats.streak > 1 ? "s" : ""} in a row`,
+                (profile.prayersPrayed || 0) > stats.prayed && `${profile.prayersPrayed} all time`,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "Answer the check-ins to start tracking"}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-[auto_repeat(7,minmax(0,1fr))] items-center gap-x-1.5 gap-y-1.5">
+          <span />
+          {week.map((d) => (
+            <span key={d} className={d === today ? "text-center text-[11px] font-semibold text-ink" : "text-center text-[11px] text-ink-3"}>
+              {WEEKDAYS_SHORT[parseDay(d).getDay()]}
+            </span>
+          ))}
+          {PRAYERS.map((n) => {
+            const Icon = PRAYER_ICON[n];
+            return [
+              <span key={n} className="flex items-center gap-1.5 pr-1 text-[12px] text-ink-2">
+                <Icon className="h-3.5 w-3.5 text-ink-3" />
+                {PRAYER_LABEL[n]}
+              </span>,
+              ...week.map((d) => {
+                const log = prayers.get(prayerId(d, n));
+                const st = log?.status;
+                return (
+                  <span key={`${d}-${n}`} className="flex justify-center" title={`${PRAYER_LABEL[n]} · ${format(parseDay(d), "EEE MMM d")} · ${st ? (st === "prayed" && !log?.onTime ? "prayed (late)" : st) : "—"}`}>
+                    <span
+                      className="h-3.5 w-3.5 rounded-full border"
+                      style={
+                        st === "prayed"
+                          ? log?.onTime
+                            ? { background: "var(--good)", borderColor: "var(--good)" }
+                            : { background: "var(--good-soft)", borderColor: "rgba(79,174,126,0.6)" }
+                          : st === "missed"
+                            ? { background: "var(--warn-soft)", borderColor: "rgba(224,134,79,0.55)" }
+                            : st === "excused"
+                              ? { background: "rgba(255,255,255,0.12)", borderColor: "transparent" }
+                              : { background: "transparent", borderColor: "var(--line)" }
+                      }
+                    />
+                  </span>
+                );
+              }),
+            ];
+          })}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-3">
+          <Legend style={{ background: "var(--good)" }}>On time</Legend>
+          <Legend style={{ background: "var(--good-soft)", border: "1px solid rgba(79,174,126,0.6)" }}>Later</Legend>
+          <Legend style={{ background: "var(--warn-soft)", border: "1px solid rgba(224,134,79,0.55)" }}>Missed</Legend>
+          <Legend style={{ background: "rgba(255,255,255,0.12)" }}>Excused</Legend>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+function Legend({ style, children }: { style: React.CSSProperties; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full" style={style} />
+      {children}
+    </span>
   );
 }

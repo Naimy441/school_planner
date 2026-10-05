@@ -22,6 +22,8 @@ import type {
   ClassSession,
   Course,
   Item,
+  PrayerName,
+  PrayerStatus,
   Series,
   Settings,
   Subtask,
@@ -318,6 +320,22 @@ export async function markAttendance(uid: string, s: ClassSession, status: Atten
   });
   if (status === "attended") award(b, uid, { points: POINTS.classAttended, classes: 1 });
   else if (status === "missed") award(b, uid, { missed: 1 });
+  await b.commit();
+}
+
+// ---------- prayer ----------
+
+/** Answer a prayer check-in. Re-answering moves the running totals rather than double-counting. */
+export async function markPrayer(uid: string, w: { id: string; date: string; prayer: PrayerName }, status: PrayerStatus, onTime: boolean, prev?: PrayerStatus) {
+  const b = writeBatch(db());
+  b.set(doc(db(), "users", uid, "prayers", w.id), { date: w.date, prayer: w.prayer, status, onTime, at: Date.now() });
+  const delta = { prayed: 0, missed: 0, excused: 0 };
+  if (prev) delta[prev]--;
+  delta[status]++;
+  const p: Record<string, unknown> = {};
+  if (delta.prayed) p.prayersPrayed = increment(delta.prayed);
+  if (delta.missed) p.prayersMissed = increment(delta.missed);
+  if (Object.keys(p).length) b.set(uidRef(uid), p, { merge: true });
   await b.commit();
 }
 
