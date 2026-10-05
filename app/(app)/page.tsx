@@ -230,6 +230,7 @@ function ExamsSoon({ exams }: { exams: Item[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14.5px] text-ink">{e.title}</div>
+                {c && <Meta parts={[c.code || c.name]} />}
                 {total < 2 ? (
                   <div className="mt-0.5 text-[12.5px] font-medium text-accent">Plan how you&apos;ll study →</div>
                 ) : (
