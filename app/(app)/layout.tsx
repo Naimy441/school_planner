@@ -14,6 +14,7 @@ import { RepeatEditorHost } from "@/components/repeat-editor";
 import { SettingsSheet } from "@/components/settings-sheet";
 import { AppShell } from "@/components/shell";
 import { StartFlow } from "@/components/start-flow";
+import { SyllabusSheetHost } from "@/components/syllabus-sheet";
 import { TimerEngine } from "@/components/timer-engine";
 import { UIProvider } from "@/components/ui-state";
 import { UpdateCheck } from "@/components/update-check";
@@ -45,6 +46,7 @@ function Gate({ children }: { children: React.ReactNode }) {
           <NewItemSheet />
           <RepeatEditorHost />
           <ImportSheet />
+          <SyllabusSheetHost />
           <SettingsSheet />
           <StartFlow />
           <AttendancePrompt />

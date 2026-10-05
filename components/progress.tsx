@@ -3,6 +3,8 @@
 import { motion } from "motion/react";
 import { CalendarCheck, CheckCircle2, Clock, Flame, ListChecks, Trophy } from "lucide-react";
 import { useMemo } from "react";
+import type { PrayerLog, PrayerName, PrayerStatus } from "@/lib/types";
+import { clearPrayer, markPrayer } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
 import { addDays, dayKey, dueLabel, fmtDuration, parseDay, WEEKDAYS_SHORT } from "@/lib/dates";
 import { levelInfo, levelTitle } from "@/lib/points";
@@ -10,7 +12,7 @@ import { PRAYER_LABEL, PRAYERS, prayerId } from "@/lib/prayer";
 import { streakOf } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import { format } from "date-fns";
-import { PRAYER_ICON } from "./prayer";
+import { PRAYER_ICON, usePrayerWindows } from "./prayer";
 import { AnimatedNumber, Bar, Card, Dot, Ring, SectionTitle } from "./ui";
 import { useUI } from "./ui-state";
 
@@ -215,9 +217,40 @@ function Stat({ icon, label, value, text }: { icon: React.ReactNode; label: stri
 }
 
 /** Prayer check-ins: the last 30 days at a glance and a week grid (rows = prayers, columns = days). */
+/** Tapping a dot cycles it: on time → later → missed → excused → unanswered. */
+const CYCLE = ["none", "ontime", "late", "missed", "excused"] as const;
+type DotState = (typeof CYCLE)[number];
+
+const DOT_LABEL: Record<DotState, string> = {
+  none: "not answered",
+  ontime: "prayed on time",
+  late: "prayed later",
+  missed: "missed",
+  excused: "excused",
+};
+
+function dotState(log?: PrayerLog): DotState {
+  if (!log) return "none";
+  if (log.status === "prayed") return log.onTime ? "ontime" : "late";
+  return log.status;
+}
+
 function PrayerStats() {
-  const { prayers, profile, settings, now } = useStore();
+  const { prayers, profile, settings, now, uid } = useStore();
+  const ui = useUI();
   const today = dayKey(now);
+  const windows = usePrayerWindows(now);
+
+  const cycle = (date: string, prayer: PrayerName) => {
+    const id = prayerId(date, prayer);
+    const log = prayers.get(id);
+    const cur = dotState(log);
+    const next = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length];
+    const fail = () => ui.toast("Couldn't save — check your connection");
+    if (next === "none") return log && clearPrayer(uid, id, log.status).catch(fail);
+    const status: PrayerStatus = next === "ontime" || next === "late" ? "prayed" : next;
+    markPrayer(uid, { id, date, prayer }, status, next === "ontime", log?.status).catch(fail);
+  };
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(today, i - 6)), [today]);
 
   const stats = useMemo(() => {
@@ -268,7 +301,7 @@ function PrayerStats() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-[auto_repeat(7,minmax(0,1fr))] items-center gap-x-1.5 gap-y-1.5">
+        <div className="mt-4 grid grid-cols-[auto_repeat(7,minmax(0,1fr))] items-center gap-x-1 gap-y-0.5">
           <span />
           {week.map((d) => (
             <span key={d} className={d === today ? "text-center text-[11px] font-semibold text-ink" : "text-center text-[11px] text-ink-3"}>
@@ -285,9 +318,26 @@ function PrayerStats() {
               ...week.map((d) => {
                 const log = prayers.get(prayerId(d, n));
                 const st = log?.status;
+                const state = dotState(log);
+                // Today's prayers that haven't started yet can't be answered.
+                const w = windows.find((x) => x.id === prayerId(d, n));
+                const future = d > today || (!!w && w.start > now);
+                const label = `${PRAYER_LABEL[n]}, ${format(parseDay(d), "EEE MMM d")}: ${DOT_LABEL[state]}`;
                 return (
-                  <span key={`${d}-${n}`} className="flex justify-center" title={`${PRAYER_LABEL[n]} · ${format(parseDay(d), "EEE MMM d")} · ${st ? (st === "prayed" && !log?.onTime ? "prayed (late)" : st) : "—"}`}>
-                    <span
+                  <button
+                    key={`${d}-${n}`}
+                    type="button"
+                    disabled={future}
+                    onClick={() => cycle(d, n)}
+                    aria-label={future ? `${PRAYER_LABEL[n]}, later today` : `${label}. Tap to change.`}
+                    title={future ? "Not yet" : `${label} — tap to change`}
+                    className="flex h-7 items-center justify-center rounded-md transition-colors hover:bg-hover disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <motion.span
+                      key={state}
+                      initial={{ scale: 0.6 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 18 }}
                       className="h-3.5 w-3.5 rounded-full border"
                       style={
                         st === "prayed"
@@ -298,10 +348,10 @@ function PrayerStats() {
                             ? { background: "var(--warn-soft)", borderColor: "rgba(224,134,79,0.55)" }
                             : st === "excused"
                               ? { background: "rgba(255,255,255,0.12)", borderColor: "transparent" }
-                              : { background: "transparent", borderColor: "var(--line)" }
+                              : { background: "transparent", borderColor: "var(--line-2)" }
                       }
                     />
-                  </span>
+                  </button>
                 );
               }),
             ];
@@ -312,6 +362,7 @@ function PrayerStats() {
           <Legend style={{ background: "var(--good-soft)", border: "1px solid rgba(79,174,126,0.6)" }}>Later</Legend>
           <Legend style={{ background: "var(--warn-soft)", border: "1px solid rgba(224,134,79,0.55)" }}>Missed</Legend>
           <Legend style={{ background: "rgba(255,255,255,0.12)" }}>Excused</Legend>
+          <span className="ml-auto">Tap a dot to change it</span>
         </div>
       </Card>
     </section>

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, ChevronLeft, ClipboardList, FileText, ListChecks, Plus } from "lucide-react";
+import { BookOpen, ChevronLeft, ClipboardList, FileText, ListChecks, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -10,12 +10,13 @@ import { fmtClock } from "@/lib/dates";
 import { levelInfo } from "@/lib/points";
 import { useStore } from "@/lib/store";
 import { useTick } from "./timer-engine";
-import { AnimatedNumber, cn, Ring, spring } from "./ui";
+import { AnimatedNumber, cn, Ring, spring, useDocked } from "./ui";
 import { useUI } from "./ui-state";
 
 export function PointsPill({ compact = false }: { compact?: boolean }) {
   const { profile } = useStore();
   const lvl = levelInfo(profile.points);
+  const path = usePathname();
   const [bump, setBump] = useState(0);
   const prev = useRef(profile.points);
   useEffect(() => {
@@ -23,7 +24,18 @@ export function PointsPill({ compact = false }: { compact?: boolean }) {
     prev.current = profile.points;
   }, [profile.points]);
   return (
-    <Link href="/#progress" className="focus-ring rounded-full" aria-label="Your progress">
+    <Link
+      href="/#progress"
+      className="focus-ring rounded-full"
+      aria-label="Your progress"
+      onClick={(e) => {
+        // The hash doesn't change on a second press, so the browser wouldn't scroll again — do it ourselves.
+        const el = document.getElementById("progress");
+        if (path !== "/" || !el) return;
+        e.preventDefault();
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }}
+    >
       <motion.div
         key={bump}
         animate={bump ? { scale: [1, 1.12, 1] } : undefined}
@@ -75,6 +87,7 @@ function QuickAdd() {
     { label: "Exam", icon: ClipboardList, run: () => ui.openNewItem({ kind: "exam" }) },
     { label: "Task", icon: ListChecks, run: () => ui.openNewItem({ kind: "task" }) },
     { label: "Class", icon: BookOpen, run: () => ui.setNewCourse(true) },
+    { label: "From a syllabus", icon: Sparkles, run: () => ui.openSyllabus("") },
   ];
   return (
     <div className="relative" ref={ref}>
@@ -183,8 +196,13 @@ function Header() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // On desktop an open task or class docks on the right and the page slides over to make room.
+  const docked = useDocked();
   return (
-    <div className="flex min-h-dvh min-w-0 flex-col">
+    <div
+      className="flex min-h-dvh min-w-0 flex-col transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      style={{ paddingRight: docked ? "var(--dock-w)" : 0 }}
+    >
       <Header />
       {children}
     </div>

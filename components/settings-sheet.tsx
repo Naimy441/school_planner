@@ -1,7 +1,7 @@
 "use client";
 
 import { signOut } from "firebase/auth";
-import { CalendarPlus, ChevronRight, LocateFixed, LogOut, Monitor, MoonStar, Smartphone, Sun, Volume2, X } from "lucide-react";
+import { CalendarPlus, ChevronRight, Eye, EyeOff, LocateFixed, LogOut, Monitor, MoonStar, Smartphone, Sparkles, Sun, Volume2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { updateSettings } from "@/lib/actions";
@@ -9,6 +9,7 @@ import { auth } from "@/lib/firebase";
 import { dayKey, fmtTime } from "@/lib/dates";
 import { defaultMethod, METHODS, PRAYER_LABEL, windowsFor, type MethodKey } from "@/lib/prayer";
 import { useStore } from "@/lib/store";
+import { DEFAULT_AI_MODEL } from "@/lib/syllabus";
 import type { PrayerSettings, SleepSettings } from "@/lib/types";
 import { fmtSettingTime, PRAYER_ICON } from "./prayer";
 import { PRESETS } from "./start-flow";
@@ -101,6 +102,7 @@ export function SettingsSheet() {
 
         <PrayerSettingsBlock />
         <SleepSettingsBlock />
+        <AISettingsBlock />
 
         <div className="mt-6 rounded-xl border border-line bg-app/50 p-3.5 text-[13px] leading-relaxed text-ink-2">
           <div className="mb-1 flex items-center gap-2 font-medium text-ink">
@@ -230,6 +232,60 @@ function PrayerSettingsBlock() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The user's own OpenAI key, for reading syllabi. */
+function AISettingsBlock() {
+  const { uid, settings } = useStore();
+  const ui = useUI();
+  const [key, setKey] = useState(settings.openaiKey || "");
+  const [model, setModel] = useState(settings.openaiModel || "");
+  const [show, setShow] = useState(false);
+  const save = (patch: { openaiKey?: string; openaiModel?: string }) =>
+    updateSettings(uid, patch)
+      .then(() => ui.toast("Saved"))
+      .catch(() => ui.toast("Couldn't save — check your connection"));
+  return (
+    <div className="mt-3 rounded-lg border border-line p-3">
+      <div className="flex items-center gap-2 text-[14px] text-ink">
+        <Sparkles className="h-4 w-4 text-ink-2" /> Syllabus reader (OpenAI)
+      </div>
+      <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+        Your own API key from{" "}
+        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+          platform.openai.com
+        </a>
+        . Saved to your account and only sent to OpenAI when you read a syllabus.
+      </p>
+      <label className="mt-2 block text-[12px] text-ink-3">
+        API key
+        <div className="mt-1 flex gap-1.5">
+          <input
+            type={show ? "text" : "password"}
+            autoComplete="off"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            onBlur={() => key.trim() !== (settings.openaiKey || "") && save({ openaiKey: key.trim() })}
+            placeholder="sk-…"
+            className={cn(inputCls, "min-w-0 flex-1")}
+          />
+          <IconButton label={show ? "Hide key" : "Show key"} className="h-9 w-9" onClick={() => setShow((v) => !v)}>
+            {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </IconButton>
+        </div>
+      </label>
+      <label className="mt-2 block text-[12px] text-ink-3">
+        Model
+        <input
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          onBlur={() => model.trim() !== (settings.openaiModel || "") && save({ openaiModel: model.trim() })}
+          placeholder={DEFAULT_AI_MODEL}
+          className={cn(inputCls, "mt-1")}
+        />
+      </label>
     </div>
   );
 }

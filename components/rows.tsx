@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { GraduationCap } from "lucide-react";
 import { completeItem, completionPoints } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
-import { dueLabel, fmtTime } from "@/lib/dates";
+import { dueLabel, fmtEstimate, fmtTime } from "@/lib/dates";
 import { effectiveDeadline, isOverdue, progressOf } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ClassSession, Item, ItemKind } from "@/lib/types";
@@ -109,7 +109,9 @@ export function ItemRow({
             <span className={cn("truncate text-[14.5px]", item.status === "done" ? "text-ink-3 line-through" : "text-ink")}>{item.title}</span>
             {upNext && <span className="shrink-0 rounded bg-accent-soft px-1.5 py-[1px] text-[10.5px] font-semibold text-accent">Up next</span>}
           </div>
-          <Meta parts={[showCourse && (course?.code || course?.name), whenText(item, now, timeOnly)]} warm={item.status === "open" && isOverdue(item, now)} />
+          <Meta
+            parts={[showCourse && (course?.code || course?.name), whenText(item, now, timeOnly), item.status === "open" && !!item.estimateMin && fmtEstimate(item.estimateMin)]}
+            warm={item.status === "open" && isOverdue(item, now)} />
         </div>
         {total > 0 && (
           <span className="tnum shrink-0 rounded-md bg-hover px-1.5 py-0.5 text-[11.5px] text-ink-3">

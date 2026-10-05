@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { animate, AnimatePresence, motion, useMotionValue, useTransform } from "motion/react";
-import { forwardRef, useEffect, useId, useRef, useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { colorOf } from "@/lib/colors";
 
@@ -300,13 +300,31 @@ export function useIsDesktop() {
 
 /**
  * Sheets can overlap (e.g. "new" closes while the item opens, or the repeat
- * editor sits on top of an item). Track them all and unlock page scrolling
- * only when the last one closes.
+ * editor sits on top of an item). Track them all: Escape closes the top-most,
+ * and page scrolling unlocks only when the last modal one closes.
  */
-const openSheets: symbol[] = [];
+const openSheets: { id: symbol; lock: boolean }[] = [];
 
 function syncScrollLock() {
-  document.body.style.overflow = openSheets.length ? "hidden" : "";
+  document.body.style.overflow = openSheets.some((s) => s.lock) ? "hidden" : "";
+}
+
+// On desktop, peek sheets dock beside the page instead of covering it; the shell
+// makes room for them (see useDocked).
+let dockedCount = 0;
+const dockListeners = new Set<() => void>();
+function setDocked(delta: number) {
+  dockedCount += delta;
+  dockListeners.forEach((l) => l());
+}
+function subscribeDocked(cb: () => void) {
+  dockListeners.add(cb);
+  return () => dockListeners.delete(cb);
+}
+
+/** true while a side panel is docked on the right (desktop only). */
+export function useDocked() {
+  return useSyncExternalStore(subscribeDocked, () => dockedCount > 0, () => false);
 }
 
 export function Sheet({
@@ -315,78 +333,101 @@ export function Sheet({
   children,
   mode = "peek",
   label,
+  front = false,
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   mode?: "peek" | "center";
   label?: string;
+  /** for docked panels that share the side: draw this one on top */
+  front?: boolean;
 }) {
   const desktop = useIsDesktop();
   const mounted = useIsClient();
+  const docked = desktop && mode === "peek";
 
   const closeRef = useRef(onClose);
   useEffect(() => {
     closeRef.current = onClose;
   });
 
+  const entry = useRef<{ id: symbol; lock: boolean } | null>(null);
   useEffect(() => {
     if (!open) return;
-    const id = Symbol("sheet");
-    openSheets.push(id);
+    const e = { id: Symbol("sheet"), lock: !docked };
+    entry.current = e;
+    openSheets.push(e);
     syncScrollLock();
+    if (docked) setDocked(1);
     // Escape closes only the top-most sheet.
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && openSheets[openSheets.length - 1] === id && closeRef.current();
+    const onKey = (ev: KeyboardEvent) => ev.key === "Escape" && openSheets[openSheets.length - 1] === e && closeRef.current();
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      openSheets.splice(openSheets.indexOf(id), 1);
+      openSheets.splice(openSheets.indexOf(e), 1);
+      entry.current = null;
       syncScrollLock();
+      if (docked) setDocked(-1);
     };
-  }, [open]);
+  }, [open, docked]);
+
+  // Brought to the front: Escape should close this one first.
+  useEffect(() => {
+    const e = entry.current;
+    if (!front || !e) return;
+    openSheets.splice(openSheets.indexOf(e), 1);
+    openSheets.push(e);
+  }, [front, open]);
 
   if (!mounted) return null;
 
-  const panel = desktop
-    ? mode === "peek"
+  const panel = docked
+    ? {
+        className: cn(
+          "fixed right-0 top-0 bottom-0 flex w-[var(--dock-w)] flex-col border-l border-line bg-panel shadow-[-12px_0_40px_rgba(0,0,0,0.3)]",
+          front ? "z-[62]" : "z-[61]",
+        ),
+        initial: { x: "100%" },
+        animate: { x: 0 },
+        exit: { x: "100%" },
+      }
+    : desktop
       ? {
-          className:
-            "fixed right-0 top-0 bottom-0 z-[61] flex w-[min(620px,92vw)] flex-col border-l border-line bg-panel shadow-[-24px_0_60px_rgba(0,0,0,0.45)]",
-          initial: { x: "100%" },
-          animate: { x: 0 },
-          exit: { x: "100%" },
-        }
-      : {
           className:
             "fixed left-1/2 top-[10vh] z-[61] flex max-h-[80vh] w-[min(560px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-[0_30px_80px_rgba(0,0,0,0.6)]",
           initial: { opacity: 0, y: 16, scale: 0.97 },
           animate: { opacity: 1, y: 0, scale: 1 },
           exit: { opacity: 0, y: 10, scale: 0.98 },
         }
-    : {
-        className:
-          "fixed inset-x-0 bottom-0 z-[61] flex max-h-[92dvh] flex-col rounded-t-[18px] border-t border-line bg-panel shadow-[0_-20px_60px_rgba(0,0,0,0.5)]",
-        initial: { y: "100%" },
-        animate: { y: 0 },
-        exit: { y: "100%" },
-      };
+      : {
+          className: cn(
+            "fixed inset-x-0 bottom-0 flex max-h-[92dvh] flex-col rounded-t-[18px] border-t border-line bg-panel shadow-[0_-20px_60px_rgba(0,0,0,0.5)]",
+            front ? "z-[62]" : "z-[61]",
+          ),
+          initial: { y: "100%" },
+          animate: { y: 0 },
+          exit: { y: "100%" },
+        };
 
   return createPortal(
     <AnimatePresence>
       {open && (
         <>
-          <motion.div
-            key="scrim"
-            className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px]"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
+          {!docked && (
+            <motion.div
+              key="scrim"
+              className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            />
+          )}
           <motion.div
             key="panel"
             role="dialog"
-            aria-modal="true"
+            aria-modal={docked ? undefined : "true"}
             aria-label={label}
             className={panel.className}
             initial={panel.initial}
@@ -422,6 +463,23 @@ function DragHandle({ onClose }: { onClose: () => void }) {
 }
 
 // ---------- Layout bits ----------
+
+/** Grow a textarea to fit its text (and keep fitting as its width changes), so long text wraps instead of hiding. */
+export function useAutoHeight(ref: React.RefObject<HTMLTextAreaElement | null>, text: string, min = 0) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = "0px";
+      el.style.height = Math.max(min, el.scrollHeight) + "px";
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el.parentElement || el);
+    return () => ro.disconnect();
+  }, [ref, text, min]);
+}
+
 
 export function SectionTitle({ children, right, className }: { children: ReactNode; right?: ReactNode; className?: string }) {
   return (

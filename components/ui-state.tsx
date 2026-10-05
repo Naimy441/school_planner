@@ -19,6 +19,8 @@ export interface NewItemDraft {
 }
 
 interface UI {
+  /** which side panel was opened last, so it's drawn on top of the other */
+  front: "item" | "course";
   itemId: string | null;
   openItem: (id: string | null) => void;
   newItem: NewItemDraft | null;
@@ -29,6 +31,9 @@ interface UI {
   setNewCourse: (v: boolean) => void;
   importOpen: boolean;
   setImportOpen: (v: boolean) => void;
+  /** reading a syllabus with AI; holds the class to fill in (or "" for a new one) */
+  syllabusFor: string | null;
+  openSyllabus: (courseId: string | null) => void;
   settingsOpen: boolean;
   setSettingsOpen: (v: boolean) => void;
   /** item the user is about to start; triggers the priority check + preset picker */
@@ -45,16 +50,31 @@ interface UI {
 const Ctx = createContext<UI | null>(null);
 
 export function UIProvider({ children }: { children: ReactNode }) {
-  const [itemId, openItem] = useState<string | null>(null);
+  const [itemId, setItemId] = useState<string | null>(null);
   const [newItem, openNewItem] = useState<NewItemDraft | null>(null);
-  const [courseId, openCourse] = useState<string | null>(null);
-  const [newCourse, setNewCourse] = useState(false);
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [newCourse, setNewCourseOpen] = useState(false);
+  const [front, setFront] = useState<"item" | "course">("item");
   const [importOpen, setImportOpen] = useState(false);
+  const [syllabusFor, openSyllabus] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [startFor, requestStart] = useState<string | null>(null);
   const [repeatFor, openRepeat] = useState<string | null>(null);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
   const [asking, setAsking] = useState<(ConfirmOptions & { resolve: (ok: boolean) => void }) | null>(null);
+
+  const openItem = useCallback((id: string | null) => {
+    setItemId(id);
+    if (id) setFront("item");
+  }, []);
+  const openCourse = useCallback((id: string | null) => {
+    setCourseId(id);
+    if (id) setFront("course");
+  }, []);
+  const setNewCourse = useCallback((v: boolean) => {
+    setNewCourseOpen(v);
+    if (v) setFront("course");
+  }, []);
 
   const confirm = useCallback(
     (opts: ConfirmOptions) =>
@@ -79,6 +99,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      front,
       itemId,
       openItem,
       newItem,
@@ -89,6 +110,8 @@ export function UIProvider({ children }: { children: ReactNode }) {
       setNewCourse,
       importOpen,
       setImportOpen,
+      syllabusFor,
+      openSyllabus,
       settingsOpen,
       setSettingsOpen,
       startFor,
@@ -98,7 +121,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
       toast,
       confirm,
     }),
-    [itemId, newItem, courseId, newCourse, importOpen, settingsOpen, startFor, repeatFor, toast, confirm],
+    [front, itemId, openItem, newItem, courseId, openCourse, newCourse, setNewCourse, importOpen, syllabusFor, settingsOpen, startFor, repeatFor, toast, confirm],
   );
 
   return (

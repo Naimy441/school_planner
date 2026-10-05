@@ -11,14 +11,17 @@ import {
   CalendarClock,
   CalendarX2,
   Clock,
-  ExternalLink,
+  ChevronRight,
   Gift,
   GraduationCap,
   Heart,
+  Hourglass,
+  Link2,
   MapPin,
   MoreHorizontal,
   Play,
   RotateCcw,
+  Share,
   Sparkles,
   Trash2,
   X,
@@ -27,17 +30,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { deleteItem, instanceDate, patchItem, prepPoints, reopenItem, setPrep, stopSeries, stopTimer } from "@/lib/actions";
 import { colorOf, courseLabel } from "@/lib/colors";
-import { dayKey, daysUntil, dueLabel, fmtDuration, fmtTime, fromLocalInput, toLocalInput } from "@/lib/dates";
+import { dayKey, daysUntil, dueLabel, fmtDuration, fmtEstimate, fmtTime, fromLocalInput, toLocalInput } from "@/lib/dates";
 import { format } from "date-fns";
 import { POINTS } from "@/lib/points";
 import { isOverdue, prepValid, progressOf } from "@/lib/schedule";
+import { accountabilityMessage, shareText } from "@/lib/share";
 import { useStore } from "@/lib/store";
 import type { Item } from "@/lib/types";
 import { celebrate } from "./celebrate";
 import { repeatSummary } from "./repeat-fields";
+import { LinksEditor } from "./links-editor";
 import { KIND_LABEL, useCompleteItem } from "./rows";
 import { SubtaskList, SuggestionChips } from "./subtasks";
-import { Bar, Button, Check, cn, IconButton, PropRow, Sheet } from "./ui";
+import { TextbookOpen } from "./textbook";
+import { Bar, Button, Check, cn, IconButton, inputCls, PropRow, Sheet, useAutoHeight } from "./ui";
 import { useUI } from "./ui-state";
 
 const KIND_ICON = { assignment: FileText, exam: GraduationCap, textbook: BookOpen, task: ListChecks } as const;
@@ -54,7 +60,7 @@ export const EXAM_SUGGESTIONS = [
 const TASK_SUGGESTIONS = ["Read the instructions", "Outline / plan", "First draft", "Check & submit"];
 
 export function ItemSheetHost() {
-  const { itemId, openItem } = useUI();
+  const { itemId, openItem, front } = useUI();
   const { itemMap } = useStore();
   const item = itemId ? itemMap.get(itemId) : undefined;
   // keep the last item rendered while the sheet animates out
@@ -62,7 +68,7 @@ export function ItemSheetHost() {
   if (item && item !== last) setLast(item);
   const shown = item || last;
   return (
-    <Sheet open={!!item} onClose={() => openItem(null)} label="Task">
+    <Sheet open={!!item} onClose={() => openItem(null)} label="Task" front={front === "item"}>
       {shown && <ItemPage key={shown.id} item={shown} />}
     </Sheet>
   );
@@ -75,12 +81,7 @@ function AutoTitle({ value, onSave }: { value: string; onSave: (v: string) => vo
   useEffect(() => {
     if (!editing.current) setText(value);
   }, [value]);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = el.scrollHeight + "px";
-  }, [text]);
+  useAutoHeight(ref, text);
   return (
     <textarea
       ref={ref}
@@ -170,12 +171,7 @@ function Notes({ value, onSave }: { value: string; onSave: (v: string) => void }
   useEffect(() => {
     if (!editing.current) setV(value);
   }, [value]);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "0px";
-    el.style.height = Math.max(72, el.scrollHeight) + "px";
-  }, [v]);
+  useAutoHeight(ref, v, 72);
   return (
     <textarea
       ref={ref}
@@ -192,6 +188,72 @@ function Notes({ value, onSave }: { value: string; onSave: (v: string) => void }
   );
 }
 
+const ESTIMATES = [10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 360];
+
+/** How long you think it'll take — a quick pick, or any number of minutes. */
+function EstimateField({ value, onChange }: { value: number | null | undefined; onChange: (min: number | null) => void }) {
+  const [custom, setCustom] = useState(false);
+  const [text, setText] = useState("");
+  const options = value && !ESTIMATES.includes(value) ? [...ESTIMATES, value].sort((a, b) => a - b) : ESTIMATES;
+  if (custom)
+    return (
+      <form
+        className="flex items-center gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const n = Math.round(Number(text));
+          if (n > 0 && n <= 6000) onChange(n);
+          setCustom(false);
+        }}
+      >
+        <input
+          autoFocus
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={6000}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+          placeholder="Minutes"
+          className={cn(inputCls, "h-[30px] w-24")}
+        />
+        <span className="text-[13px] text-ink-3">minutes</span>
+      </form>
+    );
+  return (
+    <select
+      aria-label="Time estimate"
+      value={value || ""}
+      onChange={(e) => {
+        if (e.target.value === "custom") {
+          setText(value ? String(value) : "");
+          setCustom(true);
+        } else onChange(e.target.value ? Number(e.target.value) : null);
+      }}
+      className={cn("ghost-input h-[30px] cursor-pointer appearance-none rounded-md px-2 text-[14px] hover:bg-hover", !value && "text-ink-3")}
+    >
+      <option value="">No estimate</option>
+      {options.map((m) => (
+        <option key={m} value={m}>
+          {fmtEstimate(m)}
+        </option>
+      ))}
+      <option value="custom">Custom…</option>
+    </select>
+  );
+}
+
+/** Send a friend a note asking them to check in on you about this. */
+export function useShareWithFriend() {
+  const { toast } = useUI();
+  return async (item: Item) => {
+    const r = await shareText(accountabilityMessage(item));
+    if (r === "copied") toast("Message copied — paste it to a friend");
+    else if (r === "failed") toast("Couldn't open sharing on this device");
+  };
+}
+
 function ItemPage({ item }: { item: Item }) {
   const { uid, courseMap, courses, now, timer, series } = useStore();
   const ui = useUI();
@@ -203,6 +265,8 @@ function ItemPage({ item }: { item: Item }) {
   const KindIcon = KIND_ICON[item.kind];
   const [showLate, setShowLate] = useState(!!item.lateDue);
   const [showNotes, setShowNotes] = useState(!!item.notes);
+  const [showLinks, setShowLinks] = useState(!!item.links?.length);
+  const share = useShareWithFriend();
   const [askDelete, setAskDelete] = useState(false);
   const itemSeries = item.seriesId ? series.find((x) => x.id === item.seriesId) : undefined;
   const repeating = !!itemSeries?.active;
@@ -232,6 +296,11 @@ function ItemPage({ item }: { item: Item }) {
       <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-panel/95 px-4 py-2 backdrop-blur-md sm:px-6">
         <div className="truncate text-[13px] text-ink-3">{KIND_LABEL[item.kind]}</div>
         <div className="relative flex items-center gap-1">
+          {isOpen && (
+            <IconButton label="Ask a friend to keep you accountable" onClick={() => share(item)}>
+              <Share className="h-[17px] w-[17px]" />
+            </IconButton>
+          )}
           <IconButton label="More" onClick={() => setMenu((m) => !m)}>
             <MoreHorizontal className="h-[18px] w-[18px]" />
           </IconButton>
@@ -334,18 +403,29 @@ function ItemPage({ item }: { item: Item }) {
         <div className="mt-5 border-b border-line pb-3">
         <div>
           <PropRow icon={<BookOpen />} label="Class">
-            <select
-              value={item.courseId || ""}
-              onChange={(e) => save({ courseId: e.target.value || null })}
-              className="ghost-input h-[30px] cursor-pointer appearance-none rounded-md px-2 text-[14px] hover:bg-hover"
-            >
-              <option value="">No class</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {courseLabel(c)}
-                </option>
-              ))}
-            </select>
+            <div className="flex min-w-0 items-center gap-1">
+              <select
+                value={item.courseId || ""}
+                onChange={(e) => save({ courseId: e.target.value || null })}
+                className="ghost-input h-[30px] min-w-0 flex-1 cursor-pointer appearance-none truncate rounded-md px-2 text-[14px] hover:bg-hover"
+              >
+                <option value="">No class</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {courseLabel(c)}
+                  </option>
+                ))}
+              </select>
+              {course && (
+                <button
+                  onClick={() => ui.openCourse(course.id)}
+                  className="flex h-[30px] shrink-0 items-center gap-0.5 rounded-md pl-2 pr-1 text-[13px] text-ink-3 hover:bg-hover hover:text-ink"
+                >
+                  Open class
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </PropRow>
           <PropRow icon={<CalendarClock />} label={isExam ? "Exam time" : "Due"}>
             <DateField value={item.due} onChange={(due) => save({ due })} />
@@ -396,34 +476,26 @@ function ItemPage({ item }: { item: Item }) {
           <PropRow icon={<Gift />} label="Reward">
             <LazyInput value={item.reward || ""} onSave={(reward) => save({ reward })} placeholder="An episode, a coffee, a walk…" />
           </PropRow>
+          <PropRow icon={<Hourglass />} label="Time estimate">
+            <EstimateField value={item.estimateMin} onChange={(estimateMin) => save({ estimateMin })} />
+          </PropRow>
           {!!item.focusMs && (
             <PropRow icon={<Clock />} label="Focused">
-              <div className="px-2 pt-[5px] text-[14px] text-ink-2">{fmtDuration(item.focusMs)}</div>
+              <div className="px-2 pt-[5px] text-[14px] text-ink-2">
+                {fmtDuration(item.focusMs)}
+                {item.estimateMin ? <span className="text-ink-3"> of {fmtEstimate(item.estimateMin)}</span> : null}
+              </div>
             </PropRow>
           )}
           {item.kind === "textbook" && course?.textbook && course.textbook.kind !== "none" && (
             <PropRow icon={<BookOpen />} label="Textbook">
-              {course.textbook.url ? (
-                <a
-                  href={course.textbook.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex h-[30px] items-center gap-1.5 rounded-md px-2 text-[14px] text-accent hover:bg-hover"
-                >
-                  {course.textbook.title || "Open textbook"} <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              ) : (
-                <div className="px-2 pt-[5px] text-[14px] text-ink-2">
-                  {course.textbook.title || "Physical copy"}
-                  {course.textbook.kind === "physical" && " · bring it along"}
-                </div>
-              )}
+              <TextbookOpen course={course} />
             </PropRow>
           )}
         </div>
 
-        {isOpen && ((item.kind === "assignment" && !showLate && !item.lateDue) || (!showNotes && !item.notes)) && (
-          <div className="mt-1 flex gap-1">
+        {isOpen && ((item.kind === "assignment" && !showLate && !item.lateDue) || (!showNotes && !item.notes) || (!showLinks && !item.links?.length)) && (
+          <div className="mt-1 flex flex-wrap gap-1">
             {item.kind === "assignment" && !showLate && !item.lateDue && (
               <button onClick={() => setShowLate(true)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] text-ink-3 hover:bg-hover hover:text-ink-2">
                 <Plus className="h-3.5 w-3.5" /> Late deadline
@@ -434,10 +506,24 @@ function ItemPage({ item }: { item: Item }) {
                 <Plus className="h-3.5 w-3.5" /> Notes
               </button>
             )}
+            {!showLinks && !item.links?.length && (
+              <button onClick={() => setShowLinks(true)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] text-ink-3 hover:bg-hover hover:text-ink-2">
+                <Plus className="h-3.5 w-3.5" /> Links
+              </button>
+            )}
           </div>
         )}
 
         </div>
+
+        {(showLinks || !!item.links?.length) && (
+          <div className="mt-5">
+            <h3 className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-ink">
+              <Link2 className="h-4 w-4 text-ink-3" /> Links
+            </h3>
+            <LinksEditor links={item.links || []} onChange={(links) => save({ links })} />
+          </div>
+        )}
 
         {(showNotes || item.notes) && (
           <div className="mt-5">
@@ -522,6 +608,20 @@ function ItemPage({ item }: { item: Item }) {
                   title="Distractions are away"
                   sub={prep?.place ? "Phone face-down or in a bag, extra tabs closed." : "Unlocks once you're at your spot."}
                 />
+                <div className="flex items-start gap-3 rounded-lg px-1 py-2">
+                  <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center pt-0.5 text-gold">
+                    <Gift className="h-[18px] w-[18px]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14.5px] text-ink">{item.reward ? "Your reward when it's done" : "Pick a reward for after"}</div>
+                    <LazyInput
+                      value={item.reward || ""}
+                      onSave={(reward) => save({ reward })}
+                      placeholder="An episode, a coffee, a walk…"
+                      className="mt-0.5 -ml-2 text-[13.5px]"
+                    />
+                  </div>
+                </div>
                 <Button
                   variant="primary"
                   size="lg"

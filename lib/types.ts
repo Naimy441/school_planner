@@ -15,6 +15,9 @@ export interface Textbook {
   kind: TextbookKind;
   title?: string;
   url?: string;
+  /** "file" textbooks: the PDF kept on each device (lib/local-files), by this key */
+  fileKey?: string;
+  fileName?: string;
   /** YYYY-MM-DD — textbook tasks are generated for class days from here on. */
   since?: string;
 }
@@ -90,6 +93,10 @@ export interface Item {
   place?: string;
   reward?: string;
   notes?: string;
+  /** bookmarks for this task: the assignment page, a study guide, a doc… */
+  links?: CourseLink[];
+  /** how long the user thinks it'll take (minutes) */
+  estimateMin?: number | null;
   subtasks: Subtask[];
   status: ItemStatus;
   completedAt?: number | null;
@@ -182,6 +189,10 @@ export interface Settings {
   dailyGoal: number;
   prayer?: PrayerSettings;
   sleep?: SleepSettings;
+  /** the user's own OpenAI key, for reading syllabi */
+  openaiKey?: string;
+  /** model used for syllabus reading (default DEFAULT_AI_MODEL) */
+  openaiModel?: string;
 }
 
 /** One answered prayer check-in; id is `${date}_${prayer}`. */

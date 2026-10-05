@@ -1,9 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Coffee, FileText, Pause, Play, Plus, SkipForward, SlidersHorizontal, Square, Trophy } from "lucide-react";
+import { Coffee, FileText, Pause, Play, Plus, RotateCcw, SkipForward, SlidersHorizontal, Square, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
-import { addSubtask, adjustTimer, advanceTimer, pauseTimer, phaseMs, remainingOf, resumeTimer, stopTimer } from "@/lib/actions";
+import { addSubtask, adjustTimer, advanceTimer, pauseTimer, phaseMs, remainingOf, resetTimer, resumeTimer, stopTimer } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
 import { dayKey, fmtClock, fmtDuration } from "@/lib/dates";
 import { nextSubtasks, progressOf } from "@/lib/schedule";
@@ -100,9 +100,20 @@ export function FocusView({ timer, item }: { timer: TimerState; item: Item }) {
       </div>
 
       {/* controls */}
-      <div className="mt-6 flex items-center gap-5">
+      <div className="mt-6 flex items-center gap-4">
         <IconButton label="End session" className="h-11 w-11 rounded-full bg-hover" onClick={() => stopTimer(uid, timer)}>
           <Square className="h-4 w-4" />
+        </IconButton>
+        <IconButton
+          label={isWork ? "Restart this focus block" : "Restart this break"}
+          className="h-11 w-11 rounded-full bg-hover"
+          onClick={() => {
+            const worked = isWork ? len - rem : 0;
+            resetTimer(uid, timer).catch(() => ui.toast("Couldn't reset — check your connection"));
+            ui.toast(worked >= 60_000 ? `Started over — your ${fmtDuration(worked)} still counts` : "Started over from the top");
+          }}
+        >
+          <RotateCcw className="h-4 w-4" />
         </IconButton>
         <motion.button
           whileTap={{ scale: 0.92 }}
@@ -120,9 +131,11 @@ export function FocusView({ timer, item }: { timer: TimerState; item: Item }) {
         <IconButton label="Skip to next phase" className="h-11 w-11 rounded-full bg-hover" onClick={() => advanceTimer(uid, timer, { skip: true })}>
           <SkipForward className="h-4 w-4" />
         </IconButton>
+        <IconButton label="Change the rhythm" className="h-11 w-11 rounded-full bg-hover" onClick={() => setAdjust(true)}>
+          <SlidersHorizontal className="h-4 w-4" />
+        </IconButton>
       </div>
       <button onClick={() => setAdjust(true)} className="mt-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-ink-3 hover:bg-hover hover:text-ink-2">
-        <SlidersHorizontal className="h-3.5 w-3.5" />
         {timer.workMin}/{timer.breakMin} rhythm · {fmtDuration(todayFocus)} focused today
       </button>
 
@@ -172,7 +185,7 @@ export function FocusView({ timer, item }: { timer: TimerState; item: Item }) {
                   <Check checked={false} size={30} onChange={(_, e) => toggle(item, current, e)} label={`Done: ${current.title}`} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Now</div>
-                    <div className="mt-0.5 text-[18px] font-medium leading-snug text-ink">{current.title || "Untitled step"}</div>
+                    <div className="mt-0.5 break-words text-[18px] font-medium leading-snug text-ink">{current.title || "Untitled step"}</div>
                   </div>
                 </motion.div>
                 {upcoming && (
@@ -188,7 +201,7 @@ export function FocusView({ timer, item }: { timer: TimerState; item: Item }) {
                     <span className="h-[22px] w-[22px] shrink-0 rounded-full border-[1.5px] border-dashed border-ink-3" />
                     <div className="min-w-0 flex-1">
                       <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-3">Up next</div>
-                      <div className="truncate text-[14.5px] text-ink-2">{upcoming.title || "Untitled step"}</div>
+                      <div className="break-words text-[14.5px] text-ink-2">{upcoming.title || "Untitled step"}</div>
                     </div>
                     {remaining > 2 && <span className="text-[12px] text-ink-3">+{remaining - 2} more</span>}
                   </motion.div>

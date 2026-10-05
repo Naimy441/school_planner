@@ -117,6 +117,24 @@ export function patchCourse(uid: string, id: string, patch: Partial<Course>) {
   return updateDoc(courseRef(uid, id), patch as Record<string, unknown>);
 }
 
+/** The generated "read the textbook" task's title for a book. */
+export const textbookTaskTitle = (book?: string) => `Read & take notes${book?.trim() ? ` — ${book.trim()}` : ""}`;
+
+/**
+ * When a class's textbook is renamed, open reading tasks that still have a generated
+ * name follow it (ones you've renamed yourself are left alone).
+ */
+export async function retitleTextbookTasks(uid: string, courseId: string, book: string | undefined, items: Item[]) {
+  const next = textbookTaskTitle(book);
+  const base = textbookTaskTitle();
+  const generated = (t: string) => t === base || t.startsWith(`${base} — `);
+  const stale = items.filter((i) => i.kind === "textbook" && i.courseId === courseId && i.status === "open" && i.title !== next && generated(i.title));
+  if (!stale.length) return;
+  const b = writeBatch(db());
+  for (const i of stale) b.update(itemRef(uid, i.id), { title: next });
+  await b.commit();
+}
+
 export async function deleteCourse(uid: string, course: Course, items: Item[], series: Series[]) {
   const b = writeBatch(db());
   b.delete(courseRef(uid, course.id));
@@ -339,6 +357,15 @@ export async function markPrayer(uid: string, w: { id: string; date: string; pra
   await b.commit();
 }
 
+/** Take back an answer (the prayer goes back to unanswered). */
+export async function clearPrayer(uid: string, id: string, prev: PrayerStatus) {
+  const b = writeBatch(db());
+  b.delete(doc(db(), "users", uid, "prayers", id));
+  if (prev === "prayed") b.set(uidRef(uid), { prayersPrayed: increment(-1) }, { merge: true });
+  if (prev === "missed") b.set(uidRef(uid), { prayersMissed: increment(-1) }, { merge: true });
+  await b.commit();
+}
+
 // ---------- timer ----------
 
 export function phaseMs(t: Pick<TimerState, "phase" | "workMin" | "breakMin">, phase = t.phase) {
@@ -413,6 +440,15 @@ function finishTimerInto(w: Writer, uid: string, t: TimerState, now: number) {
 export async function stopTimer(uid: string, t: TimerState) {
   const b = writeBatch(db());
   finishTimerInto(b, uid, t, Date.now());
+  await b.commit();
+}
+
+/** Start the current block over from the top (running). Work already done in it is still credited. */
+export async function resetTimer(uid: string, t: TimerState) {
+  const now = Date.now();
+  const b = writeBatch(db());
+  creditWork(b, uid, t, workedSoFar(t, now), now);
+  b.set(timerRef(uid), { ...t, endsAt: now + phaseMs(t), remainingMs: null, updatedAt: now } satisfies TimerState);
   await b.commit();
 }
 

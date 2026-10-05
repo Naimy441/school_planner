@@ -2,10 +2,11 @@
 
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, CalendarPlus, ChevronDown, ChevronRight, Link2, Pause, Play, Plus, Sparkles } from "lucide-react";
+import { BookOpen, CalendarPlus, ChevronDown, ChevronRight, Link2, Pause, Play, Plus, Share, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useMarkAttendance } from "@/components/class-gate";
+import { useShareWithFriend } from "@/components/item-sheet";
 import { ProgressSection } from "@/components/progress";
 import { ClassRow, ItemRow, Meta, whenText } from "@/components/rows";
 import { useToggleSubtask } from "@/components/subtasks";
@@ -14,7 +15,7 @@ import { Bar, Button, Card, Check, IconButton, Page, Ring, SectionTitle } from "
 import { useUI } from "@/components/ui-state";
 import { phaseMs, remainingOf } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
-import { addDays, dayKey, dayLabel, daysUntil, fmtClock, greeting } from "@/lib/dates";
+import { addDays, dayKey, dayLabel, daysUntil, fmtClock, fmtEstimate, greeting } from "@/lib/dates";
 import { isOverdue, isVisible, meetingSummary, nextSubtasks, progressOf, workQueue } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ClassSession, Item } from "@/lib/types";
@@ -265,6 +266,9 @@ function Welcome() {
         <Button variant="ghost" onClick={() => ui.setNewCourse(true)}>
           Add by hand
         </Button>
+        <Button variant="ghost" icon={<Sparkles className="h-4 w-4" />} onClick={() => ui.openSyllabus("")}>
+          Read a syllabus
+        </Button>
       </div>
     </Card>
   );
@@ -275,6 +279,7 @@ function DoNext({ item }: { item: Item }) {
   const { courseMap, now } = useStore();
   const ui = useUI();
   const toggle = useToggleSubtask();
+  const share = useShareWithFriend();
   const c = item.courseId ? courseMap.get(item.courseId) : undefined;
   const { current } = nextSubtasks(item);
   const { total, done, ratio } = progressOf(item);
@@ -288,7 +293,7 @@ function DoNext({ item }: { item: Item }) {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[18px] font-semibold leading-snug text-ink">{item.title}</div>
-              <Meta parts={[c?.code || c?.name, whenText(item, now)]} warm={isOverdue(item, now)} />
+              <Meta parts={[c?.code || c?.name, whenText(item, now), !!item.estimateMin && fmtEstimate(item.estimateMin)]} warm={isOverdue(item, now)} />
             </div>
             {examDays != null && examDays <= 7 && (
               <div className="shrink-0 text-right" style={{ color: colorOf(c?.color).fg }}>
@@ -304,7 +309,7 @@ function DoNext({ item }: { item: Item }) {
             <Check checked={false} round={false} size={20} onChange={(_, e) => toggle(item, current, e)} label={current.title} />
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-3">Next step</div>
-              <div className="truncate text-[14.5px] text-ink">{current.title || "Untitled step"}</div>
+              <div className="break-words text-[14.5px] text-ink">{current.title || "Untitled step"}</div>
             </div>
           </div>
         ) : (
@@ -322,9 +327,14 @@ function DoNext({ item }: { item: Item }) {
           </div>
         )}
 
-        <Button variant="primary" size="lg" className="mt-4 w-full" icon={<Play className="h-4 w-4" />} onClick={() => ui.requestStart(item.id)}>
-          Start
-        </Button>
+        <div className="mt-4 flex gap-2">
+          <Button variant="primary" size="lg" className="flex-1" icon={<Play className="h-4 w-4" />} onClick={() => ui.requestStart(item.id)}>
+            Start
+          </Button>
+          <IconButton label="Ask a friend to keep you accountable" className="h-12 w-12 rounded-lg border border-line" onClick={() => share(item)}>
+            <Share className="h-[18px] w-[18px]" />
+          </IconButton>
+        </div>
       </motion.div>
     </section>
   );
@@ -358,7 +368,7 @@ function FocusingCard() {
               {timer.endsAt == null ? "Paused" : isWork ? "Focusing" : "Break"}
             </div>
             <div className="truncate text-[15px] font-medium text-ink">{item.title}</div>
-            {current && <div className="truncate text-[12.5px] text-ink-2">{current.title}</div>}
+            {current && <div className="line-clamp-2 break-words text-[12.5px] text-ink-2">{current.title}</div>}
           </div>
           <div className="tnum text-[24px] font-light text-ink">{fmtClock(rem)}</div>
         </motion.div>

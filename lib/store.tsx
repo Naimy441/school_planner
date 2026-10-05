@@ -3,7 +3,7 @@
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { collection, doc, onSnapshot, query, where, type QuerySnapshot } from "firebase/firestore";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createIfMissing, ensureProfile } from "./actions";
+import { createIfMissing, ensureProfile, textbookTaskTitle } from "./actions";
 import { addDays, atTime, dayKey, DAY } from "./dates";
 import { auth, db } from "./firebase";
 import {
@@ -262,12 +262,11 @@ function useMaterialise({
       for (const date of textbookDates(c, from, today)) {
         const id = textbookItemId(c.id, date);
         if (itemMap.has(id) || tried.current.has(id)) continue;
-        const book = c.textbook.title ? ` — ${c.textbook.title}` : "";
         jobs.push({
           id,
           data: {
             kind: "textbook",
-            title: `Read & take notes${book}`,
+            title: textbookTaskTitle(c.textbook.title),
             courseId: c.id,
             due: atTime(date, "23:59"),
             subtasks: [

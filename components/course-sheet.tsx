@@ -1,17 +1,19 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Check as CheckIcon, ExternalLink, Plus, Repeat, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { deleteCourse, saveCourse, shortId, stopSeries } from "@/lib/actions";
+import { BookOpen, Check as CheckIcon, Plus, Repeat, Sparkles, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { deleteCourse, retitleTextbookTasks, saveCourse, shortId, stopSeries } from "@/lib/actions";
 import { COLOR_KEYS, colorOf } from "@/lib/colors";
 import { addDays, dayKey } from "@/lib/dates";
 import { isVisible, meetingSummary } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
-import type { ColorKey, Course, CourseLink, Meeting, TextbookKind } from "@/lib/types";
+import type { ColorKey, Course, Meeting, TextbookKind } from "@/lib/types";
+import { LinksEditor } from "./links-editor";
+import { TextbookFileField } from "./textbook";
 import { DayPicker, Field, repeatSummary } from "./repeat-fields";
 import { ItemRow } from "./rows";
-import { Bar, Button, cn, IconButton, inputCls, Segmented, Sheet } from "./ui";
+import { Bar, Button, IconButton, inputCls, Segmented, Sheet, useAutoHeight } from "./ui";
 import { useUI } from "./ui-state";
 
 export function CourseSheetHost() {
@@ -24,7 +26,7 @@ export function CourseSheetHost() {
     ui.setNewCourse(false);
   };
   return (
-    <Sheet open={open} onClose={close} label="Class">
+    <Sheet open={open} onClose={close} label="Class" front={ui.front === "course"}>
       {open && <CourseForm key={course?.id || "new"} course={course} onClose={close} />}
     </Sheet>
   );
@@ -70,6 +72,8 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
   const setMeeting = (id: string, patch: Partial<Meeting>) =>
     set({ meetings: draft.meetings.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
   const color = colorOf(draft.color);
+  const nameRef = useRef<HTMLTextAreaElement>(null);
+  useAutoHeight(nameRef, draft.name);
 
   const courseItems = useMemo(
     () => (course ? items.filter((i) => i.courseId === course.id && isVisible(i, now)).sort((a, b) => a.due - b.due) : []),
@@ -88,7 +92,10 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
     const textbook = { ...d.textbook };
     if (textbook.kind !== "none" && !textbook.since) textbook.since = dayKey();
     if (textbook.kind === "none") delete textbook.since;
-    return saveCourse(uid, { ...d, name: d.name.trim(), textbook, id: course?.id });
+    const id = await saveCourse(uid, { ...d, name: d.name.trim(), textbook, id: course?.id });
+    // Reading tasks already made for the old book follow the new name.
+    if (course) retitleTextbookTasks(uid, course.id, textbook.title, items).catch(() => {});
+    return id;
   };
   const persistRef = useRef(persist);
   const pending = useRef<Omit<Course, "id"> | null>(null);
@@ -148,12 +155,15 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
         <div className="mb-3 mt-2 flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: color.bg }}>
           <BookOpen className="h-6 w-6" style={{ color: color.fg }} />
         </div>
-        <input
+        <textarea
+          ref={nameRef}
+          rows={1}
           value={draft.name}
-          onChange={(e) => set({ name: e.target.value })}
+          onChange={(e) => set({ name: e.target.value.replace(/\n/g, "") })}
+          onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
           placeholder="Class name"
           autoFocus={isNew}
-          className="ghost-input text-[26px] font-bold tracking-tight text-ink sm:text-[30px]"
+          className="ghost-input resize-none overflow-hidden text-[26px] font-bold leading-tight tracking-tight text-ink sm:text-[30px]"
         />
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Field label="Code">
@@ -176,6 +186,21 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
             </button>
           ))}
         </div>
+
+        {!isNew && course && (
+          <button
+            onClick={() => ui.openSyllabus(course.id)}
+            className="mt-5 flex w-full items-center gap-3 rounded-xl border border-line bg-app/50 px-3 py-2.5 text-left hover:bg-hover"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium text-ink">Read the syllabus</span>
+              <span className="block text-[12.5px] text-ink-3">Drop in the PDF or screenshots — exams and deadlines get added for you.</span>
+            </span>
+          </button>
+        )}
 
         {/* links */}
         <h3 className="mb-1 mt-8 text-[15px] font-semibold text-ink">Links</h3>
@@ -277,8 +302,8 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                 className={inputCls}
               />
             </Field>
-            {draft.textbook.kind !== "physical" && (
-              <Field label={draft.textbook.kind === "file" ? "Link to the file" : "Link"} hint={draft.textbook.kind === "file" ? "A Drive / Dropbox / iCloud link to your PDF works great." : undefined}>
+            {draft.textbook.kind === "link" && (
+              <Field label="Link">
                 <input
                   type="url"
                   value={draft.textbook.url || ""}
@@ -288,6 +313,7 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                 />
               </Field>
             )}
+            {draft.textbook.kind === "file" && <TextbookFileField textbook={draft.textbook} onChange={(textbook) => set({ textbook })} />}
           </motion.div>
         )}
 
@@ -398,115 +424,6 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-/** Accepts "canvas.school.edu/…" as well as full URLs; only web links are kept. */
-function normalizeUrl(raw: string): string | null {
-  const t = raw.trim();
-  if (!t) return null;
-  try {
-    const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `https://${t}`);
-    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
-  } catch {
-    return null;
-  }
-}
-
-function hostOf(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
-function LinksEditor({ links, onChange }: { links: CourseLink[]; onChange: (links: CourseLink[]) => void }) {
-  const ui = useUI();
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-  // The confirm dialog is async, so removal reads the latest list rather than the one it was opened with.
-  const linksRef = useRef(links);
-  useEffect(() => {
-    linksRef.current = links;
-  });
-
-  const add = () => {
-    const href = normalizeUrl(url);
-    if (!href) return ui.toast(url.trim() ? "That doesn't look like a web link" : "Paste a link first");
-    const name = title.trim();
-    onChange([...links, { id: shortId(), url: href, ...(name ? { title: name } : {}) }]);
-    setTitle("");
-    setUrl("");
-  };
-  const onEnter = (e: KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      add();
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      {links.length > 0 && (
-        <div className="rounded-xl border border-line bg-app/50 p-1">
-          <AnimatePresence initial={false}>
-            {links.map((l) => (
-              <motion.div
-                key={l.id}
-                layout
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="flex items-center gap-1 rounded-lg hover:bg-hover">
-                  <a
-                    href={l.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2"
-                  >
-                    <ExternalLink className="h-4 w-4 shrink-0 text-ink-3" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] text-ink">{l.title || hostOf(l.url)}</div>
-                      <div className="truncate text-[12px] text-ink-3">{l.title ? hostOf(l.url) : l.url}</div>
-                    </div>
-                  </a>
-                  <IconButton
-                    label={`Remove ${l.title || hostOf(l.url)}`}
-                    onClick={async () => {
-                      const ok = await ui.confirm({ title: `Remove “${l.title || hostOf(l.url)}”?`, body: l.url, confirmLabel: "Remove link" });
-                      if (ok) onChange(linksRef.current.filter((x) => x.id !== l.id));
-                    }}
-                    className="mr-1 shrink-0"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </IconButton>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={onEnter} placeholder="Name (optional)" className={cn(inputCls, "sm:w-[38%]")} />
-        <div className="flex min-w-0 flex-1 gap-2">
-          <input
-            type="url"
-            inputMode="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={onEnter}
-            placeholder="https://"
-            className={cn(inputCls, "min-w-0 flex-1")}
-          />
-          <Button variant="secondary" icon={<Plus className="h-4 w-4" />} onClick={add} disabled={!url.trim()}>
-            Add
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

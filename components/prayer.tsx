@@ -2,13 +2,13 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { CloudSun, Moon, MoonStar, Sun, Sunrise, Sunset, type LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { markPrayer } from "@/lib/actions";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { markPrayer, pauseTimer, resumeTimer } from "@/lib/actions";
 import { dayKey, dayLabel, fmtTime, MIN } from "@/lib/dates";
 import { currentPrayer, inSleepWindow, PRAYER_LABEL, recentWindows, unansweredPast, type PrayerWindow } from "@/lib/prayer";
 import { useStore } from "@/lib/store";
 import type { PrayerName, PrayerStatus } from "@/lib/types";
-import { useTick } from "./timer-engine";
+import { chime, useTick } from "./timer-engine";
 import { Button, Sheet } from "./ui";
 import { useUI } from "./ui-state";
 
@@ -21,6 +21,8 @@ export const PRAYER_ICON: Record<PrayerName, LucideIcon> = {
 };
 
 const SNOOZE_KEY = "prayer-snooze";
+/** the prayer we paused a focus session for, so "I prayed" can pick it back up */
+const PAUSED_KEY = "prayer-paused";
 const SNOOZE = 15 * MIN;
 
 function readSnoozes(): Record<string, number> {
@@ -53,20 +55,35 @@ export function useMarkPrayer() {
  * you've prayed (with a snooze), and afterwards it asks about any that ended unanswered.
  */
 export function PrayerCheck() {
-  const { settings, prayers, prayersReady } = useStore();
+  const { settings, prayers, prayersReady, timer, uid } = useStore();
+  const { toast } = useUI();
   const now = useTick(30_000);
   const mark = useMarkPrayer();
   const windows = usePrayerWindows(now);
   const [snoozes, setSnoozes] = useState<Record<string, number>>({});
   const [later, setLater] = useState(false);
+  const [pausedFor, setPausedFor] = useState<string | null>(null);
   useEffect(() => {
-    const t = setTimeout(() => setSnoozes(readSnoozes()), 0);
+    const t = setTimeout(() => {
+      setSnoozes(readSnoozes());
+      try {
+        setPausedFor(localStorage.getItem(PAUSED_KEY));
+      } catch {}
+    }, 0);
     return () => clearTimeout(t);
   }, []);
+  const rememberPaused = (id: string | null) => {
+    setPausedFor(id);
+    try {
+      if (id) localStorage.setItem(PAUSED_KEY, id);
+      else localStorage.removeItem(PAUSED_KEY);
+    } catch {}
+  };
 
-  /** `at` is the click time (passed in so this stays a plain handler) */
-  const snooze = (id: string, at: number) => {
-    const next = { ...snoozes, [id]: at + SNOOZE };
+  /** `until` is when to ask again (passed in so this stays a plain handler) */
+  const snooze = (id: string, until: number) => {
+    const at = Date.now();
+    const next = { ...snoozes, [id]: until };
     // keep only live snoozes
     for (const k of Object.keys(next)) if (next[k] < at) delete next[k];
     setSnoozes(next);
@@ -82,9 +99,33 @@ export function PrayerCheck() {
   const open = prayersReady && !!w;
   const isNow = !!w && w === current;
   const Icon = w ? PRAYER_ICON[w.prayer] : Sun;
+  // A focus session is ticking: interrupt gently — pause it for you, or let you finish the block first.
+  const running = !!timer?.active && timer.endsAt != null;
+  const sessionPaused = isNow && !!w && pausedFor === w.id && !!timer?.active && timer.endsAt == null;
+  const interrupting = isNow && running;
+
+  // A soft chime, once, when prayer time arrives in the middle of a session.
+  const chimed = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !interrupting || !w || chimed.current === w.id) return;
+    chimed.current = w.id;
+    if (settings.sound) chime("break");
+  }, [open, interrupting, w, settings.sound]);
+
+  const answer = (status: PrayerStatus) => {
+    if (!w) return;
+    mark(w, status);
+    if (pausedFor) {
+      rememberPaused(null);
+      if (sessionPaused && timer) {
+        resumeTimer(uid, timer).catch(() => {});
+        toast("Welcome back — your session picked up where it left off");
+      }
+    }
+  };
 
   return (
-    <Sheet open={open} onClose={() => (isNow && w ? snooze(w.id, now) : setLater(true))} mode="center" label="Prayer check-in">
+    <Sheet open={open} onClose={() => (isNow && w ? snooze(w.id, Date.now() + SNOOZE) : setLater(true))} mode="center" label="Prayer check-in">
       {w && (
         <AnimatePresence mode="wait">
           <motion.div
@@ -96,7 +137,7 @@ export function PrayerCheck() {
             className="p-6"
           >
             <div className="flex items-center justify-between text-[12px] text-ink-3">
-              <span className="font-medium uppercase tracking-[0.12em]">{isNow ? "Prayer time" : "Quick check-in"}</span>
+              <span className="font-medium uppercase tracking-[0.12em]">{sessionPaused ? "Session paused" : isNow ? "Prayer time" : "Quick check-in"}</span>
               {!isNow && past.length > 1 && <span>{past.length} to go</span>}
             </div>
             <div className="mt-4 flex items-center gap-3">
@@ -115,16 +156,53 @@ export function PrayerCheck() {
                 </p>
               </div>
             </div>
-            {isNow ? (
+            {sessionPaused ? (
               <>
-                <Button variant="good" size="lg" className="mt-6 w-full" onClick={() => mark(w, "prayed")}>
+                <Button variant="good" size="lg" className="mt-6 w-full" onClick={() => answer("prayed")}>
+                  I prayed · back to focus
+                </Button>
+                <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => answer("excused")}>
+                  Excused · back to focus
+                </Button>
+              </>
+            ) : interrupting && timer ? (
+              <>
+                <Button
+                  variant="good"
+                  size="lg"
+                  className="mt-6 w-full"
+                  onClick={() => {
+                    rememberPaused(w.id);
+                    pauseTimer(uid, timer)?.catch(() => {});
+                  }}
+                >
+                  Pause my session &amp; go pray
+                </Button>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      // Ask again when this block ends (and at least a minute from now, at most 15).
+                      snooze(w.id, Math.min(Date.now() + SNOOZE, Math.max(Date.now() + MIN, timer.endsAt ?? 0)))
+                    }
+                  >
+                    {timer.phase === "work" && timer.endsAt && timer.endsAt - now < SNOOZE ? "After this block" : "Not yet · 15 min"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => answer("prayed")}>
+                    Already prayed
+                  </Button>
+                </div>
+              </>
+            ) : isNow ? (
+              <>
+                <Button variant="good" size="lg" className="mt-6 w-full" onClick={() => answer("prayed")}>
                   I prayed
                 </Button>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <Button variant="secondary" onClick={() => snooze(w.id, Date.now())}>
+                  <Button variant="secondary" onClick={() => snooze(w.id, Date.now() + SNOOZE)}>
                     Not yet · 15 min
                   </Button>
-                  <Button variant="ghost" onClick={() => mark(w, "excused")}>
+                  <Button variant="ghost" onClick={() => answer("excused")}>
                     Excused
                   </Button>
                 </div>
@@ -145,7 +223,13 @@ export function PrayerCheck() {
               </>
             )}
             <p className="mt-4 text-center text-[12.5px] text-ink-3">
-              {isNow ? "Step away for a few minutes — your work will be right here." : "Honest tracking helps you see the pattern. Every prayer is a fresh start."}
+              {sessionPaused
+                ? "Take your time — the timer is paused and your steps are right where you left them."
+                : interrupting
+                  ? "A short pause for prayer. Your timer and your next step will wait for you."
+                  : isNow
+                    ? "Step away for a few minutes — your work will be right here."
+                    : "Honest tracking helps you see the pattern. Every prayer is a fresh start."}
             </p>
           </motion.div>
         </AnimatePresence>

@@ -23,6 +23,8 @@
   --warn-soft: rgba(224, 134, 79, 0.15);
   --danger: #e05c59;
   --safe-top: env(safe-area-inset-top, 0px);
+  /* width of a side panel docked on desktop */
+  --dock-w: clamp(380px, 44vw, 620px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   color-scheme: dark;
 }

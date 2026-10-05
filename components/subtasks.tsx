@@ -8,7 +8,7 @@ import { POINTS } from "@/lib/points";
 import { useStore } from "@/lib/store";
 import type { Item, Subtask } from "@/lib/types";
 import { celebrate } from "./celebrate";
-import { Check, cn } from "./ui";
+import { Check, cn, useAutoHeight } from "./ui";
 import { useUI } from "./ui-state";
 
 export function useToggleSubtask() {
@@ -34,6 +34,8 @@ export function SubtaskList({ item, placeholder = "Add a step" }: { item: Item; 
   const [focusId, setFocusId] = useState<string | null>(null);
   const dragging = useRef(false);
   const [draft, setDraft] = useState("");
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  useAutoHeight(draftRef, draft);
 
   useEffect(() => {
     if (!dragging.current) setOrder(item.subtasks.map((s) => s.id));
@@ -110,13 +112,15 @@ export function SubtaskList({ item, placeholder = "Add a step" }: { item: Item; 
           ))}
         </AnimatePresence>
       </Reorder.Group>
-      <div className="flex items-center gap-3 rounded-md px-1 py-1.5 text-ink-3 focus-within:text-ink">
+      <div className="flex items-start gap-3 rounded-md px-1 py-1.5 text-ink-3 focus-within:text-ink">
         <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center">
           <Plus className="h-4 w-4" />
         </span>
-        <input
+        <textarea
+          ref={draftRef}
+          rows={1}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => setDraft(e.target.value.replace(/\n/g, " "))}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -126,7 +130,7 @@ export function SubtaskList({ item, placeholder = "Add a step" }: { item: Item; 
           onBlur={addDraft}
           placeholder={placeholder}
           enterKeyHint="done"
-          className="ghost-input text-[15px] text-ink"
+          className="ghost-input min-w-0 flex-1 resize-none overflow-hidden break-words text-[15px] leading-[22px] text-ink"
         />
       </div>
     </div>
@@ -156,7 +160,8 @@ function SubtaskRow({
   const controls = useDragControls();
   const [text, setText] = useState(s.title);
   const editing = useRef(false);
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useAutoHeight(ref, text);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -188,17 +193,20 @@ function SubtaskRow({
       className="group relative"
       whileDrag={{ scale: 1.02, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 8, zIndex: 5 }}
     >
-      <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
+      <div className="flex items-start gap-3 rounded-md px-1 py-1.5">
         <button
           onPointerDown={(e) => controls.start(e)}
-          className="absolute -left-5 top-1/2 hidden h-6 w-4 -translate-y-1/2 cursor-grab touch-none items-center justify-center text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 md:flex"
+          className="absolute -left-5 top-[9px] hidden h-6 w-4 cursor-grab touch-none items-center justify-center text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 md:flex"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <Check checked={s.done} onChange={(_, e) => onToggle(e)} round={false} size={20} label={s.title || "step"} />
-        <input
+        <span className="flex h-[22px] shrink-0 items-center">
+          <Check checked={s.done} onChange={(_, e) => onToggle(e)} round={false} size={20} label={s.title || "step"} />
+        </span>
+        <textarea
           ref={ref}
+          rows={1}
           value={text}
           onFocus={() => (editing.current = true)}
           onBlur={() => {
@@ -207,8 +215,9 @@ function SubtaskRow({
             onCommit(text);
           }}
           onChange={(e) => {
-            setText(e.target.value);
-            schedule(e.target.value);
+            const v = e.target.value.replace(/\n/g, " ");
+            setText(v);
+            schedule(v);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -223,20 +232,20 @@ function SubtaskRow({
           placeholder="Untitled step"
           enterKeyHint="next"
           className={cn(
-            "ghost-input text-[15px] transition-colors duration-300",
+            "ghost-input min-w-0 flex-1 resize-none overflow-hidden break-words text-[15px] leading-[22px] transition-colors duration-300",
             s.done ? "text-ink-3 line-through decoration-ink-3" : "text-ink",
           )}
         />
         <span
           onPointerDown={(e) => controls.start(e)}
-          className="flex h-7 w-5 shrink-0 cursor-grab touch-none items-center justify-center text-ink-3 md:hidden"
+          className="-my-0.5 flex h-[26px] w-5 shrink-0 cursor-grab touch-none items-center justify-center text-ink-3 md:hidden"
         >
           <GripVertical className="h-4 w-4" />
         </span>
         <button
           onClick={() => onRemove(text)}
           aria-label="Remove step"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-ink-3 opacity-60 hover:bg-hover hover:text-ink md:opacity-0 md:group-hover:opacity-100"
+          className="-my-0.5 flex h-[26px] w-7 shrink-0 items-center justify-center rounded text-ink-3 opacity-60 hover:bg-hover hover:text-ink md:opacity-0 md:group-hover:opacity-100"
         >
           <X className="h-3.5 w-3.5" />
         </button>

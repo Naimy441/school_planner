@@ -99,6 +99,11 @@ export function fmtDuration(ms: number) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+/** a time estimate in minutes → "~45m", "~1h 30m" */
+export function fmtEstimate(min: number) {
+  return `~${fmtDuration(min * MIN)}`;
+}
+
 export function fmtClock(ms: number) {
   const s = Math.max(0, Math.ceil(ms / 1000));
   const h = Math.floor(s / 3600);

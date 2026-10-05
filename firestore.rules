@@ -87,6 +87,8 @@ service cloud.firestore {
           && optString('reward', 300)
           && optString('where', 300)
           && optString('notes', 20000)
+          && optList('links', 100)
+          && optNumber('estimateMin')
           && data().subtasks is list && data().subtasks.size() <= 300;
       }
 
