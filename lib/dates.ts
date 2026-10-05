@@ -79,6 +79,14 @@ export function dueLabel(due: number, now = Date.now()) {
   return format(new Date(due), "MMM d · ") + time;
 }
 
+/** "earlier today" / "yesterday" / "3 days ago" */
+export function agoLabel(t: number, now = Date.now()) {
+  const d = differenceInCalendarDays(new Date(now), new Date(t));
+  if (d <= 0) return "earlier today";
+  if (d === 1) return "yesterday";
+  return `${d} days ago`;
+}
+
 export function daysUntil(t: number, now = Date.now()) {
   return differenceInCalendarDays(new Date(t), new Date(now));
 }

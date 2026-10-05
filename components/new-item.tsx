@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createItem, saveSeries } from "@/lib/actions";
-import { addDays, atTime, dayKey, dueLabel, fromLocalInput, parseDay, toLocalInput } from "@/lib/dates";
+import { addDays, atTime, dayKey, fromLocalInput, parseDay, toLocalInput } from "@/lib/dates";
 import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
 import type { Course, ItemKind } from "@/lib/types";
@@ -164,14 +164,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
                   <input type="checkbox" checked={hasLate} onChange={(e) => setHasLate(e.target.checked)} className="h-4 w-4 accent-[#2383e2]" />
                 </label>
                 {hasLate && (
-                  <Field
-                    label="Late deadline"
-                    hint={
-                      Number.isNaN(fromLocalInput(late))
-                        ? undefined
-                        : `Late work is accepted until ${dueLabel(fromLocalInput(late))}. After that it quietly drops off your list.`
-                    }
-                  >
+                  <Field label="Late deadline">
                     <input type="datetime-local" value={late} onChange={(e) => setLate(e.target.value)} className={inputCls} />
                   </Field>
                 )}

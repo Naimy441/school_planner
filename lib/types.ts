@@ -74,7 +74,7 @@ export interface Item {
   courseId?: string | null;
   /** deadline (ms). For exams: when the exam starts. */
   due: number;
-  /** optional second, late deadline (ms) — after it passes the item drops off. */
+  /** optional second, late deadline (ms) — once it passes we ask whether it was turned in. */
   lateDue?: number | null;
   /** where the exam takes place */
   where?: string;

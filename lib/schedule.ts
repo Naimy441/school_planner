@@ -70,6 +70,11 @@ export function unmarkedPast(
 
 // ---------- items ----------
 
+/** An assignment whose late window has closed and is still open — we ask about it. */
+export function needsWrapUp(item: Item, now = Date.now()) {
+  return item.status === "open" && item.kind !== "exam" && !!item.lateDue && now > item.lateDue;
+}
+
 /** Exams linger a few hours after they start, then fall off. */
 const EXAM_GRACE = 3 * HOUR;
 

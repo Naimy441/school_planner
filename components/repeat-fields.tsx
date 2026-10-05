@@ -146,7 +146,7 @@ function RepeatPreview({ value }: { value: RepeatValue }) {
       </div>
       <div className="mt-1.5 text-ink-3">
         {late
-          ? `Each one can be turned in late for ${late === 7 ? "a week" : `${late} day${late > 1 ? "s" : ""}`} — e.g. the first is accepted until ${dueLabel(first.lateDue!)}. After that it drops off your list.`
+          ? `Each one can be turned in late for ${late === 7 ? "a week" : `${late} day${late > 1 ? "s" : ""}`} — e.g. the first is accepted until ${dueLabel(first.lateDue!)}. After that we'll ask whether you turned it in.`
           : "Missed ones stay on your list (no pressure) until you finish or archive them."}
       </div>
     </div>

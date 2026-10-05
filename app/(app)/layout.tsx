@@ -16,6 +16,7 @@ import { StartFlow } from "@/components/start-flow";
 import { TimerEngine } from "@/components/timer-engine";
 import { UIProvider } from "@/components/ui-state";
 import { UpdateCheck } from "@/components/update-check";
+import { WrapUpPrompt } from "@/components/wrapup-prompt";
 import { StoreProvider, useStore } from "@/lib/store";
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -46,6 +47,7 @@ function Gate({ children }: { children: React.ReactNode }) {
           <SettingsSheet />
           <StartFlow />
           <AttendancePrompt />
+          <WrapUpPrompt />
           <ClassGate />
           <CelebrationLayer />
         </motion.div>

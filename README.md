@@ -7,7 +7,7 @@ A calm, Notion-dark planner for school: classes, exams and assignments in one vi
 ## What it does
 
 - **Classes** — import a timetable `.ics` (file or subscribe link), or add classes by hand. Lectures/labs are grouped per course, and exams in the calendar are detected.
-- **Exams & assignments** — one-off or **weekly recurring** assignments, with an optional **late deadline**. Overdue work stays visible with gentle wording; an assignment drops off only once its late deadline passes. Exams leave the view after they happen.
+- **Exams & assignments** — one-off or **weekly recurring** assignments, with an optional **late deadline**. Overdue work stays visible with gentle wording; once an assignment's late deadline passes, the app asks whether you turned it in (yes = completed with points, no = archived). Exams leave the view after they happen.
 - **Textbooks** — give a class a textbook (physical, online link, or a link to a file) and a "read & take notes" task appears automatically on each class day.
 - **Break it down** — every task opens as a Notion-style page: drag-to-reorder steps you write yourself, a work spot, a reward, and notes. Exams less than a week away are spotlighted and ask for a study plan.
 - **Get ready gate** — you can't start until you've picked a spot, checked in there (worth points), and put distractions away.
