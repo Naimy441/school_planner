@@ -25,6 +25,9 @@ interface UI {
   setSettingsOpen: (v: boolean) => void;
   /** item the user is about to start; triggers the priority check + preset picker */
   startFor: string | null;
+  /** item whose weekly repeat is being edited / created */
+  repeatFor: string | null;
+  openRepeat: (id: string | null) => void;
   requestStart: (id: string | null) => void;
   toast: (text: string) => void;
 }
@@ -39,6 +42,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [startFor, requestStart] = useState<string | null>(null);
+  const [repeatFor, openRepeat] = useState<string | null>(null);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
 
   const toast = useCallback((text: string) => {
@@ -63,9 +67,11 @@ export function UIProvider({ children }: { children: ReactNode }) {
       setSettingsOpen,
       startFor,
       requestStart,
+      repeatFor,
+      openRepeat,
       toast,
     }),
-    [itemId, newItem, courseId, newCourse, importOpen, settingsOpen, startFor, toast],
+    [itemId, newItem, courseId, newCourse, importOpen, settingsOpen, startFor, repeatFor, toast],
   );
 
   return (

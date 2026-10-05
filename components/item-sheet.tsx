@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
   Archive,
+  Repeat,
   BookOpen,
   FileText,
   ListChecks,
@@ -24,15 +25,16 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { deleteItem, patchItem, prepPoints, reopenItem, setPrep, stopTimer } from "@/lib/actions";
+import { deleteItem, instanceDate, patchItem, prepPoints, reopenItem, setPrep, stopSeries, stopTimer } from "@/lib/actions";
 import { colorOf, courseLabel } from "@/lib/colors";
-import { daysUntil, dueLabel, fmtDuration, fmtTime, fromLocalInput, toLocalInput } from "@/lib/dates";
+import { dayKey, daysUntil, dueLabel, fmtDuration, fmtTime, fromLocalInput, toLocalInput } from "@/lib/dates";
 import { format } from "date-fns";
 import { POINTS } from "@/lib/points";
 import { isOverdue, prepValid, progressOf } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { Item } from "@/lib/types";
 import { celebrate } from "./celebrate";
+import { repeatSummary } from "./repeat-fields";
 import { KIND_LABEL, useCompleteItem } from "./rows";
 import { SubtaskList, SuggestionChips } from "./subtasks";
 import { Bar, Button, Check, cn, IconButton, PropRow, Sheet } from "./ui";
@@ -191,7 +193,7 @@ function Notes({ value, onSave }: { value: string; onSave: (v: string) => void }
 }
 
 function ItemPage({ item }: { item: Item }) {
-  const { uid, courseMap, courses, now, timer } = useStore();
+  const { uid, courseMap, courses, now, timer, series } = useStore();
   const ui = useUI();
   const router = useRouter();
   const complete = useCompleteItem();
@@ -201,6 +203,9 @@ function ItemPage({ item }: { item: Item }) {
   const KindIcon = KIND_ICON[item.kind];
   const [showLate, setShowLate] = useState(!!item.lateDue);
   const [showNotes, setShowNotes] = useState(!!item.notes);
+  const [askDelete, setAskDelete] = useState(false);
+  const itemSeries = item.seriesId ? series.find((x) => x.id === item.seriesId) : undefined;
+  const repeating = !!itemSeries?.active;
   const { total, done, ratio } = progressOf(item);
   const overdue = isOverdue(item, now) && item.status === "open";
   const isExam = item.kind === "exam";
@@ -222,6 +227,7 @@ function ItemPage({ item }: { item: Item }) {
 
   return (
     <div className="relative">
+      <DeleteChoice item={item} open={askDelete} onClose={() => setAskDelete(false)} />
       {/* top bar */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-panel/95 px-4 py-2 backdrop-blur-md sm:px-6">
         <div className="truncate text-[13px] text-ink-3">{KIND_LABEL[item.kind]}</div>
@@ -262,6 +268,8 @@ function ItemPage({ item }: { item: Item }) {
                   icon={<Trash2 />}
                   danger
                   onClick={async () => {
+                    setMenu(false);
+                    if (repeating) return setAskDelete(true);
                     if (!confirm(`Delete “${item.title}”?`)) return;
                     if (timerHere && timer) await stopTimer(uid, timer);
                     await deleteItem(uid, item);
@@ -334,6 +342,16 @@ function ItemPage({ item }: { item: Item }) {
           <PropRow icon={<CalendarClock />} label={isExam ? "Exam time" : "Due"}>
             <DateField value={item.due} onChange={(due) => save({ due })} />
           </PropRow>
+          {item.kind === "assignment" && (
+            <PropRow icon={<Repeat />} label="Repeats">
+              <button
+                onClick={() => ui.openRepeat(item.id)}
+                className={cn("h-[30px] max-w-full truncate rounded-md px-2 text-left text-[14px] hover:bg-hover", repeating ? "text-ink" : "text-ink-3")}
+              >
+                {repeating ? repeatSummary(itemSeries!) : item.seriesId ? "No longer repeats" : "Doesn't repeat"}
+              </button>
+            </PropRow>
+          )}
           {item.kind === "assignment" && (showLate || item.lateDue) && (
             <PropRow icon={<CalendarX2 />} label="Late deadline">
               {item.lateDue ? (
@@ -544,6 +562,57 @@ function ItemPage({ item }: { item: Item }) {
 
       </div>
     </div>
+  );
+}
+
+function DeleteChoice({ item, open, onClose }: { item: Item; open: boolean; onClose: () => void }) {
+  const { uid, series, items, timer } = useStore();
+  const ui = useUI();
+  const s = item.seriesId ? series.find((x) => x.id === item.seriesId) : undefined;
+  const from = instanceDate(item) || dayKey(item.due);
+  const done = (msg: string) => {
+    onClose();
+    ui.openItem(null);
+    ui.toast(msg);
+  };
+  const stopTimerIfHere = () => timer?.active && timer.itemId === item.id && stopTimer(uid, timer);
+  return (
+    <Sheet open={open} onClose={onClose} mode="center" label="Delete weekly assignment">
+      <div className="p-6">
+        <h3 className="text-[17px] font-semibold text-ink">Delete “{item.title}”?</h3>
+        <p className="mt-1 text-[13.5px] text-ink-3">This one repeats every week.</p>
+        <div className="mt-5 flex flex-col gap-2">
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={async () => {
+              stopTimerIfHere();
+              await deleteItem(uid, item);
+              done("Deleted this week's — the rest are untouched");
+            }}
+          >
+            Just this one
+          </Button>
+          {s && (
+            <Button
+              variant="danger"
+              size="lg"
+              className="border border-[rgba(224,92,89,0.35)]"
+              onClick={async () => {
+                stopTimerIfHere();
+                await stopSeries(uid, s, from, items, true);
+                done("Deleted this and all upcoming weeks");
+              }}
+            >
+              This and all upcoming
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 

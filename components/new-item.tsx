@@ -2,81 +2,18 @@
 
 import { useState } from "react";
 import { createItem, saveSeries } from "@/lib/actions";
-import { addDays, atTime, dayKey, dueLabel, fmtTime, fromLocalInput, parseDay, toLocalInput, WEEKDAYS } from "@/lib/dates";
-import { seriesOccurrences } from "@/lib/schedule";
+import { addDays, atTime, dayKey, dueLabel, fromLocalInput, parseDay, toLocalInput } from "@/lib/dates";
 import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
-import type { ItemKind } from "@/lib/types";
-import { Button, cn, inputCls, Segmented, Sheet } from "./ui";
+import type { Course, ItemKind } from "@/lib/types";
+import { Field, RepeatFields, repeatOccurrences, type RepeatValue } from "./repeat-fields";
+import { Button, inputCls, Segmented, Sheet } from "./ui";
 import { useUI, type NewItemDraft } from "./ui-state";
 
-export function DayPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
-  return (
-    <div className="flex gap-1">
-      {WEEKDAYS.map((d, i) => {
-        const on = value.includes(i);
-        return (
-          <button
-            key={d}
-            type="button"
-            onClick={() => onChange(on ? value.filter((x) => x !== i) : [...value, i].sort())}
-            className={cn(
-              "h-8 flex-1 rounded-md text-[12.5px] font-medium transition-colors",
-              on ? "bg-accent text-white" : "bg-hover text-ink-3 hover:text-ink-2",
-            )}
-          >
-            {d.slice(0, 2)}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-const LATE_CHOICES = [
-  { label: "No", days: 0 },
-  { label: "1 day", days: 1 },
-  { label: "2 days", days: 2 },
-  { label: "3 days", days: 3 },
-  { label: "1 week", days: 7 },
-];
-
-/** Spells out what the weekly settings actually mean. */
-function SeriesPreview({ days, time, start, end, lateDays }: { days: number[]; time: string; start: string; end: string; lateDays: number }) {
-  if (!days.length || !time || !start || !end || start > end) return null;
-  const occ = seriesOccurrences(
-    { id: "", courseId: "", title: "", days, time, startDate: start, endDate: end, lateDays, createdAt: 0, active: true },
-    start,
-    end,
-  );
-  if (!occ.length) return <p className="text-[12.5px] text-warn">No due dates fall in that range — check the days or dates.</p>;
-  const first = occ[0];
-  const names = days.map((d) => WEEKDAYS[d]).join(" & ");
-  return (
-    <div className="rounded-lg border border-line bg-app/60 px-3 py-2.5 text-[13px] leading-relaxed text-ink-2">
-      <div>
-        Due every <b className="font-medium text-ink">{names}</b> at {fmtTime(time)} — {occ.length} time{occ.length === 1 ? "" : "s"}.
-      </div>
-      <div>
-        First one: <b className="font-medium text-ink">{dueLabel(first.due)}</b>
-      </div>
-      <div className="mt-1.5 text-ink-3">
-        {lateDays
-          ? `Each one can be turned in late for ${lateDays === 7 ? "a week" : `${lateDays} day${lateDays > 1 ? "s" : ""}`} — e.g. the first is accepted until ${dueLabel(first.lateDue!)}. After that it drops off your list.`
-          : "Missed ones stay on your list (no pressure) until you finish or archive them."}
-      </div>
-    </div>
-  );
-}
-
-export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <label className="block">
-      <div className="mb-1.5 text-[12.5px] font-medium text-ink-2">{label}</div>
-      {children}
-      {hint && <div className="mt-1 text-[12px] text-ink-3">{hint}</div>}
-    </label>
-  );
+/** Last class day of the term, or ~14 weeks out. */
+export function termEnd(course: Course | undefined, today: string) {
+  const last = course?.meetings.map((m) => m.endDate).sort().pop();
+  return last && last > today ? last : addDays(today, 7 * 14);
 }
 
 export function NewItemSheet() {
@@ -102,15 +39,13 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
   const [late, setLate] = useState(() => toLocalInput(atTime(addDays(today, 4), "23:59")));
   const [where, setWhere] = useState("");
   const [recurring, setRecurring] = useState(!!draft.recurring);
-  const [days, setDays] = useState<number[]>([parseDay(today).getDay()]);
-  const [time, setTime] = useState("23:59");
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(() => {
-    const last = courseMap.get(draft.courseId || "")?.meetings.map((m) => m.endDate).sort().pop();
-    return last && last > today ? last : addDays(today, 7 * 14);
-  });
-  const [lateDays, setLateDays] = useState("");
-  const [customLate, setCustomLate] = useState(false);
+  const [repeat, setRepeat] = useState<RepeatValue>(() => ({
+    days: [parseDay(today).getDay()],
+    time: "23:59",
+    start: today,
+    end: termEnd(courseMap.get(draft.courseId || ""), today),
+    lateDays: 0,
+  }));
   const [busy, setBusy] = useState(false);
 
   const changeKind = (k: typeof kind) => {
@@ -121,11 +56,10 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
   // default series range to the class's term
   const changeCourse = (id: string) => {
     setCourseId(id);
-    const last = courseMap.get(id)?.meetings.map((m) => m.endDate).sort().pop();
-    if (last && last > today) setEnd(last);
+    setRepeat((r) => ({ ...r, end: termEnd(courseMap.get(id), today) }));
   };
 
-  const canSave = title.trim() && (!recurring || (courseId && days.length && start <= end));
+  const canSave = title.trim() && (!recurring || (courseId && repeatOccurrences(repeat).length > 0));
 
   const save = async () => {
     if (!canSave) return;
@@ -135,11 +69,11 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
         await saveSeries(uid, {
           courseId,
           title: title.trim(),
-          days,
-          time,
-          startDate: start,
-          endDate: end,
-          lateDays: lateDays ? Math.max(0, +lateDays) : null,
+          days: repeat.days,
+          time: repeat.time,
+          startDate: repeat.start,
+          endDate: repeat.end,
+          lateDays: repeat.lateDays || null,
           createdAt: Date.now(),
           active: true,
         });
@@ -210,65 +144,7 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
 
         {kind === "assignment" && recurring ? (
           <>
-            <Field label="Due on">
-              <DayPicker value={days} onChange={setDays} />
-            </Field>
-            <Field label="At">
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls} />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Starting">
-                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} />
-              </Field>
-              <Field label="Until">
-                <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={inputCls} />
-              </Field>
-            </div>
-            <Field label="Late work accepted">
-              <div className="flex flex-wrap gap-1.5">
-                {LATE_CHOICES.map((c) => (
-                  <button
-                    key={c.label}
-                    type="button"
-                    onClick={() => {
-                      setCustomLate(false);
-                      setLateDays(c.days ? String(c.days) : "");
-                    }}
-                    className={cn(
-                      "h-8 rounded-md px-3 text-[13px] font-medium transition-colors",
-                      !customLate && (lateDays ? +lateDays : 0) === c.days ? "bg-accent text-white" : "bg-hover text-ink-2 hover:text-ink",
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-                {customLate ? (
-                  <div className="flex h-8 items-center gap-1.5 rounded-md bg-accent pl-1 pr-2.5 text-[13px] font-medium text-white">
-                    <input
-                      autoFocus
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={60}
-                      value={lateDays}
-                      onChange={(e) => setLateDays(e.target.value.replace(/\D/g, "").slice(0, 2))}
-                      aria-label="Days late work is accepted"
-                      className="h-6 w-10 rounded bg-white/20 text-center text-white outline-none"
-                    />
-                    days
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setCustomLate(true)}
-                    className="h-8 rounded-md bg-hover px-3 text-[13px] font-medium text-ink-2 hover:text-ink"
-                  >
-                    Custom
-                  </button>
-                )}
-              </div>
-            </Field>
-            <SeriesPreview days={days} time={time} start={start} end={end} lateDays={lateDays ? +lateDays : 0} />
+            <RepeatFields value={repeat} onChange={setRepeat} />
             {!courseId && <p className="text-[12.5px] text-warn">Pick a class for weekly assignments.</p>}
           </>
         ) : (

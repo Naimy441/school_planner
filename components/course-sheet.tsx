@@ -3,13 +3,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, Check as CheckIcon, Plus, Repeat, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { deleteCourse, deleteSeries, saveCourse, shortId } from "@/lib/actions";
+import { deleteCourse, saveCourse, shortId, stopSeries } from "@/lib/actions";
 import { COLOR_KEYS, colorOf } from "@/lib/colors";
 import { addDays, dayKey, WEEKDAYS } from "@/lib/dates";
 import { isVisible } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ColorKey, Course, Meeting, TextbookKind } from "@/lib/types";
-import { DayPicker, Field } from "./new-item";
+import { DayPicker, Field } from "./repeat-fields";
 import { ItemRow } from "./rows";
 import { Bar, Button, cn, IconButton, inputCls, Segmented, Sheet } from "./ui";
 import { useUI } from "./ui-state";
@@ -77,7 +77,7 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
   );
   const exams = courseItems.filter((i) => i.kind === "exam");
   const work = courseItems.filter((i) => i.kind !== "exam");
-  const courseSeries = course ? series.filter((s) => s.courseId === course.id) : [];
+  const courseSeries = course ? series.filter((s) => s.courseId === course.id && s.active) : [];
   const att = course ? [...attendance.values()].filter((a) => a.courseId === course.id) : [];
   const attended = att.filter((a) => a.status === "attended").length;
   const missed = att.filter((a) => a.status === "missed").length;
@@ -292,7 +292,10 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
                 </div>
                 <IconButton
                   label="Stop repeating"
-                  onClick={() => confirm(`Stop “${s.title}” from repeating? Future empty ones are removed.`) && deleteSeries(uid, s, items)}
+                  onClick={() =>
+                    confirm(`Stop “${s.title}” from repeating? Upcoming weeks you haven't started are removed.`) &&
+                    stopSeries(uid, s, dayKey(), items)
+                  }
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </IconButton>

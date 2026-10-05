@@ -14,7 +14,8 @@ import {
   type Transaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { dayKey, MIN } from "./dates";
+import { addDays, dayKey, MIN } from "./dates";
+import { seriesOccurrences } from "./schedule";
 import { POINTS } from "./points";
 import type {
   AttendanceStatus,
@@ -246,13 +247,62 @@ export async function saveSeries(uid: string, s: Omit<Series, "id"> & { id?: str
   return id;
 }
 
-export async function deleteSeries(uid: string, s: Series, items: Item[]) {
+/** The class day a generated weekly item belongs to (ids look like `${seriesId}_${YYYY-MM-DD}`). */
+export function instanceDate(i: Item) {
+  return i.seriesId && i.id.startsWith(`${i.seriesId}_`) ? i.id.slice(i.seriesId.length + 1) : null;
+}
+
+/** Nothing the user would lose: no steps, prep, notes or focus time. */
+function untouched(i: Item) {
+  return !i.subtasks.length && !i.prep && !i.notes && !i.focusMs;
+}
+
+/**
+ * Change a weekly rule. Upcoming weeks move to the new schedule; weeks that no
+ * longer fit are removed unless you've already started them. Past weeks keep
+ * their original deadlines.
+ */
+export async function updateSeries(uid: string, s: Series, next: Omit<Series, "id">, items: Item[]) {
   const b = writeBatch(db());
-  b.delete(seriesRef(uid, s.id));
+  b.set(seriesRef(uid, s.id), next);
   const now = Date.now();
-  for (const i of items)
-    if (i.seriesId === s.id && i.status === "open" && i.due > now && !i.subtasks.length) b.delete(itemRef(uid, i.id));
+  const nextS = { ...next, id: s.id };
+  for (const i of items) {
+    const d = instanceDate(i);
+    if (i.seriesId !== s.id || i.status !== "open" || !d) continue;
+    const occ = seriesOccurrences(nextS, d, d)[0];
+    if (i.due <= now && (!occ || occ.due <= now)) continue;
+    if (occ) b.update(itemRef(uid, i.id), { title: next.title, courseId: next.courseId, due: occ.due, lateDue: occ.lateDue });
+    else if (untouched(i)) b.delete(itemRef(uid, i.id));
+  }
   await b.commit();
+}
+
+/**
+ * Stop repeating from `fromDate` on (inclusive). Weeks you've started stay
+ * unless `removeStarted` (the explicit "delete this and upcoming").
+ */
+export async function stopSeries(uid: string, s: Series, fromDate: string, items: Item[], removeStarted = false) {
+  const b = writeBatch(db());
+  b.update(seriesRef(uid, s.id), { active: false, endDate: addDays(fromDate, -1) });
+  for (const i of items) {
+    const d = instanceDate(i);
+    if (i.seriesId !== s.id || i.status !== "open" || !d || d < fromDate) continue;
+    if (removeStarted || untouched(i)) b.delete(itemRef(uid, i.id));
+  }
+  await b.commit();
+}
+
+/** Turn a one-off assignment into a weekly one; it stays as this week's copy. */
+export async function makeRepeating(uid: string, item: Item, next: Omit<Series, "id">) {
+  const id = newId();
+  // Later weeks are generated from the day after this one, so it isn't duplicated.
+  const startDate = next.startDate > dayKey(item.due) ? next.startDate : addDays(dayKey(item.due), 1);
+  const b = writeBatch(db());
+  b.set(seriesRef(uid, id), { ...next, startDate });
+  b.update(itemRef(uid, item.id), { seriesId: id });
+  await b.commit();
+  return id;
 }
 
 // ---------- attendance ----------

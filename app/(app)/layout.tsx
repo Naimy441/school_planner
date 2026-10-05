@@ -9,6 +9,7 @@ import { ItemSheetHost } from "@/components/item-sheet";
 import { Login, Private } from "@/components/login";
 import { Logo } from "@/components/logo";
 import { NewItemSheet } from "@/components/new-item";
+import { RepeatEditorHost } from "@/components/repeat-editor";
 import { SettingsSheet } from "@/components/settings-sheet";
 import { AppShell } from "@/components/shell";
 import { StartFlow } from "@/components/start-flow";
@@ -40,6 +41,7 @@ function Gate({ children }: { children: React.ReactNode }) {
           <ItemSheetHost />
           <CourseSheetHost />
           <NewItemSheet />
+          <RepeatEditorHost />
           <ImportSheet />
           <SettingsSheet />
           <StartFlow />
