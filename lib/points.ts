@@ -1,6 +1,7 @@
 export const POINTS = {
   subtask: 10,
   arrive: 10,
+  distractions: 10,
   item: 50,
   examStudy: 80,
   onTime: 25,

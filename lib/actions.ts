@@ -177,16 +177,29 @@ export async function toggleSubtask(uid: string, item: Item, subId: string, done
   await b.commit();
 }
 
+const PREP_WINDOW = 6 * 60 * MIN;
+
+/** Points a readiness check would earn right now (0 if already earned this session). */
+export function prepPoints(item: Item, step: "place" | "distractions", now = Date.now()) {
+  const at = step === "place" ? item.arriveAwardedAt : item.calmAwardedAt;
+  return at && now - at < PREP_WINDOW ? 0 : step === "place" ? POINTS.arrive : POINTS.distractions;
+}
+
 export async function setPrep(uid: string, item: Item, patch: { place?: boolean; distractions?: boolean }) {
   const now = Date.now();
-  const fresh = item.prep && now - item.prep.at < 6 * 60 * MIN;
+  const fresh = item.prep && now - item.prep.at < PREP_WINDOW;
   const prep = { at: now, place: false, distractions: false, ...(fresh ? item.prep : {}), ...patch };
+  // The steps go in order: leaving your spot also resets "distractions away".
+  if (patch.place === false) prep.distractions = false;
   const b = writeBatch(db());
   const upd: Record<string, unknown> = { prep };
-  const awardedRecently = item.arriveAwardedAt && now - item.arriveAwardedAt < 6 * 60 * MIN;
-  if (patch.place && !awardedRecently) {
+  if (patch.place && prepPoints(item, "place", now)) {
     upd.arriveAwardedAt = now;
     award(b, uid, { points: POINTS.arrive, subtasks: 1 });
+  }
+  if (patch.distractions && prepPoints(item, "distractions", now)) {
+    upd.calmAwardedAt = now;
+    award(b, uid, { points: POINTS.distractions, subtasks: 1 });
   }
   b.update(itemRef(uid, item.id), upd);
   await b.commit();

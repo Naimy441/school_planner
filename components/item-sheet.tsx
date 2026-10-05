@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { deleteItem, patchItem, reopenItem, setPrep, stopTimer } from "@/lib/actions";
+import { deleteItem, patchItem, prepPoints, reopenItem, setPrep, stopTimer } from "@/lib/actions";
 import { colorOf, courseLabel } from "@/lib/colors";
 import { daysUntil, dueLabel, fmtDuration, fmtTime, fromLocalInput, toLocalInput } from "@/lib/dates";
 import { format } from "date-fns";
@@ -459,24 +459,42 @@ function ItemPage({ item }: { item: Item }) {
               <>
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-[15px] font-semibold text-ink">Get ready</h3>
-                  <span className="text-[12px] text-ink-3">+{POINTS.arrive} for showing up</span>
+                  <span className="text-[12px] text-ink-3">+{POINTS.arrive} each</span>
                 </div>
                 <ReadyRow
+                  step={1}
                   checked={!!prep?.place}
                   disabled={!item.place}
+                  points={prepPoints(item, "place", now)}
                   onChange={(v, e) => {
-                    if (v && !(item.arriveAwardedAt && now - item.arriveAwardedAt < 6 * 3_600_000))
-                      celebrate({ points: POINTS.arrive, x: e.clientX, y: e.clientY });
+                    const pts = prepPoints(item, "place", now);
+                    if (v && pts) celebrate({ points: pts, x: e.clientX, y: e.clientY });
                     setPrep(uid, item, { place: v });
                   }}
-                  title={item.place ? `I'm at ${item.place}` : "Pick a work spot above first"}
-                  sub="Going there is step zero — and it counts."
-                />
+                  title={item.place ? `I'm at ${item.place}` : "Where will you work?"}
+                  sub={item.place ? "Going there is step zero — and it counts." : "Somewhere you can actually focus."}
+                >
+                  {!item.place && (
+                    <LazyInput
+                      value=""
+                      onSave={(place) => place && save({ place })}
+                      placeholder="Library 3rd floor, quiet café…"
+                      className="mt-1.5 -ml-2 bg-hover"
+                    />
+                  )}
+                </ReadyRow>
                 <ReadyRow
+                  step={2}
                   checked={!!prep?.distractions}
-                  onChange={(v) => setPrep(uid, item, { distractions: v })}
+                  disabled={!prep?.place}
+                  points={prepPoints(item, "distractions", now)}
+                  onChange={(v, e) => {
+                    const pts = prepPoints(item, "distractions", now);
+                    if (v && pts) celebrate({ points: pts, x: e.clientX, y: e.clientY });
+                    setPrep(uid, item, { distractions: v });
+                  }}
                   title="Distractions are away"
-                  sub="Phone face-down or in a bag, extra tabs closed."
+                  sub={prep?.place ? "Phone face-down or in a bag, extra tabs closed." : "Unlocks once you're at your spot."}
                 />
                 <Button
                   variant="primary"
@@ -530,26 +548,38 @@ function ItemPage({ item }: { item: Item }) {
 }
 
 function ReadyRow({
+  step,
   checked,
   onChange,
   title,
   sub,
   disabled,
+  points,
+  children,
 }: {
+  step: number;
   checked: boolean;
   onChange: (v: boolean, e: React.MouseEvent) => void;
   title: string;
   sub: string;
   disabled?: boolean;
+  points: number;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className={cn("flex items-start gap-3 rounded-lg px-1 py-2", disabled && "opacity-50")}>
-      <div className="pt-0.5">
-        <Check checked={checked} onChange={disabled ? undefined : onChange} label={title} />
+    <div className="flex items-start gap-3 rounded-lg px-1 py-2">
+      <div className={cn("pt-0.5 transition-opacity", disabled && "pointer-events-none opacity-30")}>
+        <Check checked={checked} onChange={disabled ? undefined : onChange} label={`Step ${step}: ${title}`} />
       </div>
-      <div className="min-w-0">
-        <div className={cn("text-[14.5px] transition-colors", checked ? "text-ink-2" : "text-ink")}>{title}</div>
-        <div className="text-[12.5px] text-ink-3">{sub}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className={cn("text-[14.5px] transition-colors", checked ? "text-ink-2" : disabled && !children ? "text-ink-3" : "text-ink")}>
+            {title}
+          </div>
+          {!checked && points > 0 && <span className={cn("shrink-0 text-[12px]", disabled ? "text-ink-3/60" : "text-gold/80")}>+{points}</span>}
+        </div>
+        <div className={cn("text-[12.5px]", disabled && !children ? "text-ink-3/70" : "text-ink-3")}>{sub}</div>
+        {children}
       </div>
     </div>
   );

@@ -95,6 +95,8 @@ export interface Item {
   rewarded?: boolean;
   /** "arrived at place" points granted for the current prep */
   arriveAwardedAt?: number | null;
+  /** "distractions away" points granted for the current prep */
+  calmAwardedAt?: number | null;
 }
 
 /** Weekly recurring assignment template; instances are materialised as Items. */
