@@ -68,7 +68,18 @@ export function Meta({ parts, warm }: { parts: (string | undefined | null | fals
 
 const lead = "flex h-[22px] w-[22px] shrink-0 items-center justify-center";
 
-export function ItemRow({ item, timeOnly = false, showCourse = true }: { item: Item; timeOnly?: boolean; showCourse?: boolean }) {
+export function ItemRow({
+  item,
+  timeOnly = false,
+  showCourse = true,
+  upNext = false,
+}: {
+  item: Item;
+  timeOnly?: boolean;
+  showCourse?: boolean;
+  /** this is the "Do this next" item shown at the top of Home */
+  upNext?: boolean;
+}) {
   const { courseMap, now } = useStore();
   const ui = useUI();
   const complete = useCompleteItem();
@@ -94,7 +105,10 @@ export function ItemRow({ item, timeOnly = false, showCourse = true }: { item: I
           <Check checked={item.status === "done"} onChange={(_, e) => complete(item, e)} label={`Complete ${item.title}`} />
         )}
         <div className="min-w-0 flex-1">
-          <div className={cn("truncate text-[14.5px]", item.status === "done" ? "text-ink-3 line-through" : "text-ink")}>{item.title}</div>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={cn("truncate text-[14.5px]", item.status === "done" ? "text-ink-3 line-through" : "text-ink")}>{item.title}</span>
+            {upNext && <span className="shrink-0 rounded bg-accent-soft px-1.5 py-[1px] text-[10.5px] font-semibold text-accent">Up next</span>}
+          </div>
           <Meta parts={[showCourse && (course?.code || course?.name), whenText(item, now, timeOnly)]} warm={item.status === "open" && isOverdue(item, now)} />
         </div>
         {total > 0 && (

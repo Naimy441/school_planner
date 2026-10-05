@@ -30,18 +30,18 @@ export default function Home() {
 
   const visible = useMemo(() => items.filter((i) => isVisible(i, now)), [items, now]);
   const top = useMemo(() => workQueue(items, now)[0], [items, now]);
-  // The hero card already shows the top item, so lists below skip it.
+  // The hero card's item still appears in its list (tagged "Up next") so lists are complete.
   const heroId = focusing ? timer?.itemId : top?.id;
   // Exams within a week get their own strip (and aren't repeated in the lists).
   const exams = useMemo(
-    () => visible.filter((i) => i.kind === "exam" && i.id !== heroId && i.due > now && daysUntil(i.due, now) <= 7).sort((a, b) => a.due - b.due),
-    [visible, heroId, now],
+    () => visible.filter((i) => i.kind === "exam" && i.due > now && daysUntil(i.due, now) <= 7).sort((a, b) => a.due - b.due),
+    [visible, now],
   );
   const examIds = useMemo(() => new Set(exams.map((e) => e.id)), [exams]);
 
   const todayClasses = sessions.filter((s) => s.date === today && s.end > now && !attendance.has(s.id));
   const todayItems = visible
-    .filter((i) => i.id !== heroId && !examIds.has(i.id) && (dayKey(i.due) === today || isOverdue(i, now)))
+    .filter((i) => !examIds.has(i.id) && (dayKey(i.due) === today || isOverdue(i, now)))
     .sort((a, b) => Number(isOverdue(a, now)) - Number(isOverdue(b, now)) || a.due - b.due);
 
   const week = useMemo(() => {
@@ -51,12 +51,12 @@ export default function Home() {
     for (const s of sessions) if (s.date > today && s.date <= end && !attendance.has(s.id)) get(s.date).classes.push(s);
     for (const i of visible) {
       const k = dayKey(i.due);
-      if (i.id !== heroId && !examIds.has(i.id) && k > today && k <= end && !isOverdue(i, now)) get(k).items.push(i);
+      if (!examIds.has(i.id) && k > today && k <= end && !isOverdue(i, now)) get(k).items.push(i);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, v]) => ({ date, ...v, items: v.items.sort((a, b) => a.due - b.due) }));
-  }, [sessions, visible, attendance, today, now, heroId, examIds]);
+  }, [sessions, visible, attendance, today, now, examIds]);
 
-  const later = visible.filter((i) => i.id !== heroId && dayKey(i.due) > addDays(today, WEEK) && !isOverdue(i, now)).sort((a, b) => a.due - b.due);
+  const later = visible.filter((i) => dayKey(i.due) > addDays(today, WEEK) && !isOverdue(i, now)).sort((a, b) => a.due - b.due);
 
   return (
     <Page>
@@ -93,7 +93,7 @@ export default function Home() {
                   <ClassRow key={s.id} s={s} onCheckIn={() => markAtt(s, "attended")} />
                 ))}
                 {todayItems.map((i) => (
-                  <ItemRow key={i.id} item={i} timeOnly={!isOverdue(i, now)} />
+                  <ItemRow key={i.id} item={i} timeOnly={!isOverdue(i, now)} upNext={i.id === heroId} />
                 ))}
               </AnimatePresence>
             </Card>
@@ -110,7 +110,7 @@ export default function Home() {
                     <ClassRow key={s.id} s={s} />
                   ))}
                   {d.items.map((i) => (
-                    <ItemRow key={i.id} item={i} timeOnly />
+                    <ItemRow key={i.id} item={i} timeOnly upNext={i.id === heroId} />
                   ))}
                 </AnimatePresence>
               </Card>
@@ -130,7 +130,7 @@ export default function Home() {
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                   <Card className="mt-2 p-1">
                     {later.map((i) => (
-                      <ItemRow key={i.id} item={i} />
+                      <ItemRow key={i.id} item={i} upNext={i.id === heroId} />
                     ))}
                   </Card>
                 </motion.div>

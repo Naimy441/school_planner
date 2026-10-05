@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, Check as CheckIcon, Plus, Repeat, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteCourse, saveCourse, shortId, stopSeries } from "@/lib/actions";
 import { COLOR_KEYS, colorOf } from "@/lib/colors";
 import { addDays, dayKey } from "@/lib/dates";
@@ -11,7 +11,7 @@ import { useStore } from "@/lib/store";
 import type { ColorKey, Course, Meeting, TextbookKind } from "@/lib/types";
 import { DayPicker, Field, repeatSummary } from "./repeat-fields";
 import { ItemRow } from "./rows";
-import { Bar, Button, cn, IconButton, inputCls, Segmented, Sheet } from "./ui";
+import { Bar, Button, IconButton, inputCls, Segmented, Sheet } from "./ui";
 import { useUI } from "./ui-state";
 
 export function CourseSheetHost() {
@@ -83,20 +83,50 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
   const missed = att.filter((a) => a.status === "missed").length;
   const rate = attended + missed ? attended / (attended + missed) : 0;
 
-  const save = async () => {
+  /** Write a draft. Reading tasks start from the day a textbook is first added. */
+  const persist = async (d: Omit<Course, "id">) => {
+    const textbook = { ...d.textbook };
+    if (textbook.kind !== "none" && !textbook.since) textbook.since = dayKey();
+    if (textbook.kind === "none") delete textbook.since;
+    return saveCourse(uid, { ...d, name: d.name.trim(), textbook, id: course?.id });
+  };
+  const persistRef = useRef(persist);
+  const pending = useRef<Omit<Course, "id"> | null>(null);
+  useEffect(() => {
+    persistRef.current = persist;
+    pending.current = !isNew && dirty && draft.name.trim() ? draft : null;
+  });
+
+  // Existing classes save themselves (Notion-style) shortly after each edit…
+  useEffect(() => {
+    if (isNew || !dirty || !draft.name.trim()) return;
+    const t = setTimeout(() => {
+      setSaving(true);
+      persistRef.current(draft)
+        .then(() => setDirty(false))
+        .catch(() => ui.toast("Couldn't save — check your connection"))
+        .finally(() => setSaving(false));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [draft, dirty, isNew, ui]);
+
+  // …and anything still pending is saved when the panel closes.
+  useEffect(
+    () => () => {
+      if (pending.current) persistRef.current(pending.current).catch(() => {});
+    },
+    [],
+  );
+
+  const create = async () => {
     if (!draft.name.trim()) return ui.toast("Give your class a name");
     setSaving(true);
     try {
-      const prevKind = course?.textbook.kind || "none";
-      const textbook = { ...draft.textbook };
-      if (textbook.kind !== "none" && (prevKind === "none" || !textbook.since)) textbook.since = dayKey();
-      const id = await saveCourse(uid, { ...draft, name: draft.name.trim(), textbook, id: course?.id });
+      const id = await persist(draft);
       setDirty(false);
-      if (isNew) {
-        ui.setNewCourse(false);
-        ui.openCourse(id);
-        ui.toast("Class added");
-      } else ui.toast("Saved");
+      ui.setNewCourse(false);
+      ui.openCourse(id);
+      ui.toast("Class added");
     } catch {
       ui.toast("Couldn't save");
     } finally {
@@ -107,7 +137,9 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
   return (
     <div className="relative min-h-full pb-4">
       <div className="sticky top-0 z-10 flex items-center justify-between bg-panel/90 px-4 py-2 backdrop-blur-md sm:px-6">
-        <span className="text-[13px] text-ink-3">{isNew ? "New class" : "Class"}</span>
+        <span className="text-[13px] text-ink-3">
+          {isNew ? "New class" : saving ? "Saving…" : dirty ? "Editing…" : "Class · saved"}
+        </span>
         <IconButton label="Close" onClick={onClose}>
           <X className="h-[18px] w-[18px]" />
         </IconButton>
@@ -324,7 +356,7 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
       </div>
 
       <AnimatePresence>
-        {(dirty || isNew) && (
+        {isNew && (
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -332,13 +364,8 @@ function CourseForm({ course, onClose }: { course?: Course; onClose: () => void 
             className="sticky bottom-0 z-20 mt-6 border-t border-line bg-panel/95 px-5 py-3 backdrop-blur-md"
           >
             <div className="flex items-center justify-end gap-2">
-              {!isNew && (
-                <Button variant="ghost" onClick={() => (setDraft({ ...course! }), setDirty(false))}>
-                  Discard
-                </Button>
-              )}
-              <Button variant="primary" onClick={save} disabled={saving} className={cn(isNew && "w-full sm:w-auto")}>
-                {isNew ? "Create class" : "Save changes"}
+              <Button variant="primary" onClick={create} disabled={saving} className="w-full sm:w-auto">
+                Create class
               </Button>
             </div>
           </motion.div>
