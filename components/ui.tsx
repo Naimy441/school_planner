@@ -298,6 +298,17 @@ export function useIsDesktop() {
   return useSyncExternalStore(subscribeDesktop, () => window.matchMedia("(min-width: 900px)").matches, () => false);
 }
 
+/**
+ * Sheets can overlap (e.g. "new" closes while the item opens, or the repeat
+ * editor sits on top of an item). Track them all and unlock page scrolling
+ * only when the last one closes.
+ */
+const openSheets: symbol[] = [];
+
+function syncScrollLock() {
+  document.body.style.overflow = openSheets.length ? "hidden" : "";
+}
+
 export function Sheet({
   open,
   onClose,
@@ -314,17 +325,25 @@ export function Sheet({
   const desktop = useIsDesktop();
   const mounted = useIsClient();
 
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const id = Symbol("sheet");
+    openSheets.push(id);
+    syncScrollLock();
+    // Escape closes only the top-most sheet.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && openSheets[openSheets.length - 1] === id && closeRef.current();
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      openSheets.splice(openSheets.indexOf(id), 1);
+      syncScrollLock();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!mounted) return null;
 
