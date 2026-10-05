@@ -7,12 +7,11 @@ import {
   ClipboardList,
   FileText,
   GraduationCap,
-  LayoutGrid,
+  House,
   ListChecks,
   Plus,
   Settings as SettingsIcon,
   Timer,
-  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -22,15 +21,13 @@ import { fmtClock } from "@/lib/dates";
 import { levelInfo } from "@/lib/points";
 import { useStore } from "@/lib/store";
 import { useTick } from "./timer-engine";
-import { AnimatedNumber, cn, Dot, Ring, spring } from "./ui";
+import { AnimatedNumber, cn, Ring, spring } from "./ui";
 import { useUI } from "./ui-state";
 
 const NAV = [
-  { href: "/", label: "Overview", icon: LayoutGrid },
-  { href: "/today", label: "Today", icon: ListChecks },
+  { href: "/", label: "Home", icon: House },
   { href: "/focus", label: "Focus", icon: Timer },
   { href: "/progress", label: "Progress", icon: ChartNoAxesColumn },
-  { href: "/classes", label: "Classes", icon: GraduationCap },
 ];
 
 function useActive() {
@@ -100,7 +97,6 @@ function QuickAdd({ align = "right" }: { align?: "left" | "right" }) {
     { label: "Exam", icon: ClipboardList, run: () => ui.openNewItem({ kind: "exam" }) },
     { label: "Task", icon: ListChecks, run: () => ui.openNewItem({ kind: "task" }) },
     { label: "Class", icon: BookOpen, run: () => ui.setNewCourse(true) },
-    { label: "Import .ics", icon: Upload, run: () => ui.setImportOpen(true) },
   ];
   return (
     <div className="relative" ref={ref}>
@@ -183,24 +179,18 @@ function Sidebar() {
           );
         })}
       </nav>
-      <div className="mt-6 px-4 text-[12px] font-medium text-ink-3">Classes</div>
-      <div className="mt-1 flex min-h-0 flex-1 flex-col gap-[1px] overflow-y-auto px-2">
-        {courses.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => ui.openCourse(c.id)}
-            className="flex h-[28px] items-center gap-2.5 rounded-md px-2.5 text-left text-[13.5px] text-ink-2 hover:bg-hover hover:text-ink"
-          >
-            <Dot color={c.color} />
-            <span className="truncate">{c.code || c.name}</span>
-          </button>
-        ))}
-        <button
-          onClick={() => ui.setNewCourse(true)}
-          className="flex h-[28px] items-center gap-2.5 rounded-md px-2.5 text-left text-[13.5px] text-ink-3 hover:bg-hover hover:text-ink-2"
+      <div className="flex-1" />
+      <div className="px-2 pb-2">
+        <Link
+          href="/classes"
+          className={cn(
+            "flex h-[30px] items-center gap-2.5 rounded-md px-2.5 text-[14px] transition-colors",
+            isActive("/classes") ? "bg-press text-ink" : "text-ink-3 hover:bg-hover hover:text-ink-2",
+          )}
         >
-          <Plus className="h-3.5 w-3.5" /> Add class
-        </button>
+          <GraduationCap className="h-[17px] w-[17px]" />
+          Classes{courses.length ? <span className="ml-auto text-[12px] text-ink-3">{courses.length}</span> : null}
+        </Link>
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-line p-3">
         <PointsPill />
@@ -254,7 +244,7 @@ function TabBar() {
   const isActive = useActive();
   return (
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-[rgba(25,25,25,0.82)] backdrop-blur-xl md:hidden">
-      <div className="mx-auto flex max-w-[520px] items-stretch justify-around px-1">
+      <div className="mx-auto flex max-w-[420px] items-stretch justify-around px-4">
         {NAV.map((n) => {
           const active = isActive(n.href);
           return (

@@ -1,4 +1,4 @@
-import { addDays, atTime, DAY, dayKey, HOUR, parseDay } from "./dates";
+import { addDays, atTime, DAY, dayKey, fmtTime, HOUR, parseDay } from "./dates";
 import type { Attendance, ClassSession, Course, Item, Meeting, Series } from "./types";
 
 export function sessionId(courseId: string, date: string, startTime: string) {
@@ -158,9 +158,9 @@ export function seriesItemId(seriesId: string, date: string) {
 }
 
 export function meetingSummary(m: Meeting) {
-  const names = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-  const days = [...m.days].sort().map((d) => names[d]).join(" ");
-  return `${days} · ${m.start}–${m.end}`;
+  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const days = [...m.days].sort().map((d) => names[d]).join(", ");
+  return `${days} · ${fmtTime(m.start)} – ${fmtTime(m.end)}`;
 }
 
 /** Consecutive days with points, counting today only once it has some. */

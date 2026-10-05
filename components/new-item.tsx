@@ -7,7 +7,7 @@ import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
 import type { ItemKind } from "@/lib/types";
 import { Button, cn, inputCls, Segmented, Sheet } from "./ui";
-import { useUI } from "./ui-state";
+import { useUI, type NewItemDraft } from "./ui-state";
 
 export function DayPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
   return (
@@ -47,15 +47,15 @@ export function NewItemSheet() {
   const open = !!ui.newItem;
   return (
     <Sheet open={open} onClose={() => ui.openNewItem(null)} mode="center" label="New">
-      {ui.newItem && <NewItemForm key={JSON.stringify(ui.newItem)} />}
+      {/* draft is passed in so the form keeps rendering while the sheet animates closed */}
+      {ui.newItem && <NewItemForm key={JSON.stringify(ui.newItem)} draft={ui.newItem} />}
     </Sheet>
   );
 }
 
-function NewItemForm() {
+function NewItemForm({ draft }: { draft: NewItemDraft }) {
   const ui = useUI();
   const { uid, courses, courseMap } = useStore();
-  const draft = ui.newItem!;
   const [kind, setKind] = useState<Exclude<ItemKind, "textbook">>(draft.kind === "textbook" ? "task" : draft.kind);
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState(draft.courseId || "");

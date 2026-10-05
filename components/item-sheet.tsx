@@ -4,6 +4,9 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   Archive,
   BookOpen,
+  FileText,
+  ListChecks,
+  Plus,
   CalendarClock,
   CalendarX2,
   Clock,
@@ -23,16 +26,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { deleteItem, patchItem, reopenItem, setPrep, stopTimer } from "@/lib/actions";
 import { colorOf, courseLabel } from "@/lib/colors";
-import { daysUntil, dueLabel, fmtDuration, fromLocalInput, toLocalInput } from "@/lib/dates";
+import { daysUntil, dueLabel, fmtDuration, fmtTime, fromLocalInput, toLocalInput } from "@/lib/dates";
+import { format } from "date-fns";
 import { POINTS } from "@/lib/points";
 import { isOverdue, prepValid, progressOf } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { Item } from "@/lib/types";
 import { celebrate } from "./celebrate";
-import { KIND_META, useCompleteItem } from "./rows";
+import { KIND_LABEL, useCompleteItem } from "./rows";
 import { SubtaskList, SuggestionChips } from "./subtasks";
-import { Bar, Button, Check, cn, IconButton, PropRow, Sheet, Tag } from "./ui";
+import { Bar, Button, Check, cn, IconButton, PropRow, Sheet } from "./ui";
 import { useUI } from "./ui-state";
+
+const KIND_ICON = { assignment: FileText, exam: GraduationCap, textbook: BookOpen, task: ListChecks } as const;
 
 export const EXAM_SUGGESTIONS = [
   "Review lecture notes",
@@ -128,6 +134,33 @@ function LazyInput({
   );
 }
 
+/** Friendly date text that opens the native date-time picker. */
+function DateField({ value, onChange }: { value: number; onChange: (t: number) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const label = Number.isNaN(value) ? "Pick a time" : `${format(value, "EEE, MMM d")} · ${fmtTime(value)}`;
+  return (
+    <div className="relative inline-flex">
+      <span className="flex h-[30px] items-center rounded-md px-2 text-[14px] text-ink hover:bg-hover">{label}</span>
+      <input
+        ref={ref}
+        type="datetime-local"
+        aria-label="Date and time"
+        value={Number.isNaN(value) ? "" : toLocalInput(value)}
+        onClick={() => {
+          try {
+            ref.current?.showPicker();
+          } catch {}
+        }}
+        onChange={(e) => {
+          const t = fromLocalInput(e.target.value);
+          if (!Number.isNaN(t)) onChange(t);
+        }}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      />
+    </div>
+  );
+}
+
 function Notes({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const [v, setV] = useState(value);
   const editing = useRef(false);
@@ -165,7 +198,9 @@ function ItemPage({ item }: { item: Item }) {
   const [menu, setMenu] = useState(false);
   const course = item.courseId ? courseMap.get(item.courseId) : undefined;
   const color = colorOf(course?.color);
-  const meta = KIND_META[item.kind];
+  const KindIcon = KIND_ICON[item.kind];
+  const [showLate, setShowLate] = useState(!!item.lateDue);
+  const [showNotes, setShowNotes] = useState(!!item.notes);
   const { total, done, ratio } = progressOf(item);
   const overdue = isOverdue(item, now) && item.status === "open";
   const isExam = item.kind === "exam";
@@ -189,15 +224,7 @@ function ItemPage({ item }: { item: Item }) {
     <div className="relative">
       {/* top bar */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-panel/95 px-4 py-2 backdrop-blur-md sm:px-6">
-        <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-3">
-          {course && (
-            <button onClick={() => ui.openCourse(course.id)} className="truncate rounded px-1 hover:bg-hover hover:text-ink-2">
-              {course.code || course.name}
-            </button>
-          )}
-          {course && <span>/</span>}
-          <span className="truncate">{meta.label}</span>
-        </div>
+        <div className="truncate text-[13px] text-ink-3">{KIND_LABEL[item.kind]}</div>
         <div className="relative flex items-center gap-1">
           <IconButton label="More" onClick={() => setMenu((m) => !m)}>
             <MoreHorizontal className="h-[18px] w-[18px]" />
@@ -258,7 +285,7 @@ function ItemPage({ item }: { item: Item }) {
           className="mb-3 mt-3 flex h-12 w-12 items-center justify-center rounded-xl"
           style={{ background: color.bg }}
         >
-          <meta.icon className="h-6 w-6" style={{ color: color.fg }} />
+          <KindIcon className="h-6 w-6" style={{ color: color.fg }} />
         </motion.div>
         <AutoTitle value={item.title} onSave={(title) => save({ title })} />
 
@@ -288,7 +315,8 @@ function ItemPage({ item }: { item: Item }) {
         )}
 
         {/* properties */}
-        <div className="mt-5 border-b border-line pb-4">
+        <div className="mt-5 border-b border-line pb-3">
+        <div>
           <PropRow icon={<BookOpen />} label="Class">
             <select
               value={item.courseId || ""}
@@ -304,30 +332,20 @@ function ItemPage({ item }: { item: Item }) {
             </select>
           </PropRow>
           <PropRow icon={<CalendarClock />} label={isExam ? "Exam time" : "Due"}>
-            <input
-              type="datetime-local"
-              value={toLocalInput(item.due)}
-              onChange={(e) => {
-                const t = fromLocalInput(e.target.value);
-                if (!Number.isNaN(t)) save({ due: t });
-              }}
-              className="ghost-input h-[30px] rounded-md px-2 text-[14px] hover:bg-hover"
-            />
+            <DateField value={item.due} onChange={(due) => save({ due })} />
           </PropRow>
-          {item.kind === "assignment" && (
+          {item.kind === "assignment" && (showLate || item.lateDue) && (
             <PropRow icon={<CalendarX2 />} label="Late deadline">
               {item.lateDue ? (
                 <div className="flex items-center">
-                  <input
-                    type="datetime-local"
-                    value={toLocalInput(item.lateDue)}
-                    onChange={(e) => {
-                      const t = fromLocalInput(e.target.value);
-                      if (!Number.isNaN(t)) save({ lateDue: t });
+                  <DateField value={item.lateDue} onChange={(lateDue) => save({ lateDue })} />
+                  <IconButton
+                    label="Remove late deadline"
+                    onClick={() => {
+                      setShowLate(false);
+                      save({ lateDue: null });
                     }}
-                    className="ghost-input h-[30px] rounded-md px-2 text-[14px] hover:bg-hover"
-                  />
-                  <IconButton label="Remove late deadline" onClick={() => save({ lateDue: null })}>
+                  >
                     <X className="h-3.5 w-3.5" />
                   </IconButton>
                 </div>
@@ -336,7 +354,7 @@ function ItemPage({ item }: { item: Item }) {
                   onClick={() => save({ lateDue: item.due + 3 * 86_400_000 })}
                   className="h-[30px] rounded-md px-2 text-[14px] text-ink-3 hover:bg-hover"
                 >
-                  Empty
+                  Set (3 days after due)
                 </button>
               )}
             </PropRow>
@@ -378,6 +396,30 @@ function ItemPage({ item }: { item: Item }) {
           )}
         </div>
 
+        {isOpen && ((item.kind === "assignment" && !showLate && !item.lateDue) || (!showNotes && !item.notes)) && (
+          <div className="mt-1 flex gap-1">
+            {item.kind === "assignment" && !showLate && !item.lateDue && (
+              <button onClick={() => setShowLate(true)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] text-ink-3 hover:bg-hover hover:text-ink-2">
+                <Plus className="h-3.5 w-3.5" /> Late deadline
+              </button>
+            )}
+            {!showNotes && !item.notes && (
+              <button onClick={() => setShowNotes(true)} className="flex items-center gap-1 rounded-md px-2 py-1 text-[12.5px] text-ink-3 hover:bg-hover hover:text-ink-2">
+                <Plus className="h-3.5 w-3.5" /> Notes
+              </button>
+            )}
+          </div>
+        )}
+
+        </div>
+
+        {(showNotes || item.notes) && (
+          <div className="mt-5">
+            <h3 className="mb-1 text-[15px] font-semibold text-ink">Notes</h3>
+            <Notes value={item.notes || ""} onSave={(notes) => save({ notes })} />
+          </div>
+        )}
+
         {/* steps */}
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between">
@@ -390,7 +432,7 @@ function ItemPage({ item }: { item: Item }) {
           </div>
           {total > 0 && <Bar value={ratio} height={5} color={ratio >= 1 ? "var(--good)" : "var(--accent)"} className="mb-3" />}
           <SubtaskList item={item} placeholder={isExam ? "Add a study step — a topic, a day, a technique…" : "Add a step"} />
-          {isOpen && total < 3 && (
+          {isOpen && total === 0 && (
             <SuggestionChips item={item} suggestions={isExam ? EXAM_SUGGESTIONS : item.kind === "textbook" ? [] : TASK_SUGGESTIONS} />
           )}
         </div>
@@ -455,32 +497,33 @@ function ItemPage({ item }: { item: Item }) {
         )}
 
         {isOpen && (
-          <div className="mt-3">
-            <Button
-              variant={total > 0 && done === total ? "good" : "subtle"}
-              size="lg"
-              className="w-full"
-              onClick={(e) => {
-                complete(item, e);
-                ui.openItem(null);
-              }}
-            >
-              {total > 0 && done === total ? "Everything's done — complete it 🎉" : "Mark as complete"}
-            </Button>
+          <div className="mt-3 flex justify-center">
+            {total > 0 && done === total ? (
+              <Button
+                variant="good"
+                size="lg"
+                className="w-full"
+                onClick={(e) => {
+                  complete(item, e);
+                  ui.openItem(null);
+                }}
+              >
+                Every step&apos;s done — complete it 🎉
+              </Button>
+            ) : (
+              <button
+                onClick={(e) => {
+                  complete(item, e);
+                  ui.openItem(null);
+                }}
+                className="rounded-md px-3 py-2 text-[13px] text-ink-3 hover:bg-hover hover:text-ink-2"
+              >
+                Already done? Mark complete
+              </button>
+            )}
           </div>
         )}
 
-        {/* notes */}
-        <div className="mt-8">
-          <h3 className="mb-1 text-[15px] font-semibold text-ink">Notes</h3>
-          <Notes value={item.notes || ""} onSave={(notes) => save({ notes })} />
-        </div>
-
-        {course && (
-          <div className="mt-6">
-            <Tag color={course.color}>{course.name}</Tag>
-          </div>
-        )}
       </div>
     </div>
   );

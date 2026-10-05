@@ -465,7 +465,7 @@ export function Page({ children, className }: { children: ReactNode; className?:
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className={cn("mx-auto w-full max-w-[880px] px-4 pb-32 pt-4 sm:px-8 md:pb-16 md:pt-10", className)}
+      className={cn("mx-auto w-full max-w-[760px] px-4 pb-32 pt-4 sm:px-8 md:pb-16 md:pt-10", className)}
     >
       {children}
     </motion.main>

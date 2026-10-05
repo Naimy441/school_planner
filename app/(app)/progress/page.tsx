@@ -12,7 +12,7 @@ import { useStore } from "@/lib/store";
 import { format } from "date-fns";
 
 export default function ProgressPage() {
-  const { profile, days, items, courses, attendance, now } = useStore();
+  const { profile, days, items, courses, attendance, now, settings } = useStore();
   const lvl = levelInfo(profile.points);
   const today = dayKey(now);
 
@@ -20,17 +20,8 @@ export default function ProgressPage() {
 
   const last14 = useMemo(() => Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)), [today]);
   const maxFocus = Math.max(30 * 60_000, ...last14.map((d) => days.get(d)?.focusMs || 0));
+  const todayPts = days.get(today)?.points || 0;
   const weekPoints = last14.slice(7).reduce((s, d) => s + (days.get(d)?.points || 0), 0);
-
-  // 16-week heatmap aligned to weeks starting Sunday
-  const heat = useMemo(() => {
-    const end = today;
-    const startSunday = addDays(end, -(parseDay(end).getDay() + 15 * 7));
-    const weeks: string[][] = [];
-    for (let w = 0; w < 16; w++) weeks.push(Array.from({ length: 7 }, (_, d) => addDays(startSunday, w * 7 + d)));
-    return weeks;
-  }, [today]);
-  const maxPts = Math.max(50, ...[...days.values()].map((d) => d.points || 0));
 
   const attended = profile.classesAttended;
   const missed = profile.classesMissed;
@@ -76,20 +67,26 @@ export default function ProgressPage() {
       </Card>
 
       {/* stat tiles */}
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat icon={<Flame className="h-4 w-4 text-warn" />} label="Day streak" value={streak} />
+      <div className="mt-3 grid grid-cols-3 gap-3">
         <Stat icon={<Clock className="h-4 w-4 text-accent" />} label="Focus time" text={fmtDuration(profile.focusMs)} />
         <Stat icon={<CheckCircle2 className="h-4 w-4 text-good" />} label="Tasks done" value={profile.itemsDone} />
         <Stat icon={<ListChecks className="h-4 w-4 text-ink-2" />} label="Steps done" value={profile.subtasksDone} />
       </div>
 
-      {/* streak week */}
+      {/* today + streak */}
       <Card className="mt-3 p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] font-medium text-ink-2">This week</span>
-          <span className="text-[12px] text-ink-3">{streak ? `${streak} day${streak > 1 ? "s" : ""} in a row` : "Start a streak today"}</span>
+        <div className="flex items-center gap-4">
+          <Ring value={todayPts / settings.dailyGoal} size={56} stroke={5} color={todayPts >= settings.dailyGoal ? "var(--good)" : "var(--gold)"}>
+            <AnimatedNumber value={todayPts} className="text-[14px] font-bold text-ink" />
+          </Ring>
+          <div className="min-w-0">
+            <div className="text-[14.5px] font-semibold text-ink">
+              {todayPts >= settings.dailyGoal ? "Today's goal reached 🎉" : `${settings.dailyGoal - todayPts} points to today's goal`}
+            </div>
+            <div className="text-[12.5px] text-ink-3">{streak ? `${streak} day${streak > 1 ? "s" : ""} in a row` : "Get one point today to start a streak"}</div>
+          </div>
         </div>
-        <div className="mt-3 flex justify-between gap-1.5">
+        <div className="mt-4 flex justify-between gap-1.5">
           {last14.slice(7).map((d, i) => {
             const on = (days.get(d)?.points || 0) > 0;
             return (
@@ -139,31 +136,6 @@ export default function ProgressPage() {
           <div className="mt-2 flex justify-between text-[11px] text-ink-3">
             <span>{format(parseDay(last14[0]), "MMM d")}</span>
             <span>Today</span>
-          </div>
-        </Card>
-      </section>
-
-      {/* heatmap */}
-      <section className="mt-8">
-        <SectionTitle>Activity</SectionTitle>
-        <Card className="overflow-x-auto p-4">
-          <div className="flex min-w-max gap-[3px]">
-            {heat.map((w, wi) => (
-              <div key={wi} className="flex flex-col gap-[3px]">
-                {w.map((d) => {
-                  const p = days.get(d)?.points || 0;
-                  const t = p ? 0.25 + 0.75 * Math.min(1, p / maxPts) : 0;
-                  return (
-                    <div
-                      key={d}
-                      title={`${d}: ${p} pts`}
-                      className="h-[13px] w-[13px] rounded-[3px]"
-                      style={{ background: d > today ? "transparent" : p ? `rgba(79,174,126,${t})` : "rgba(255,255,255,0.05)" }}
-                    />
-                  );
-                })}
-              </div>
-            ))}
           </div>
         </Card>
       </section>

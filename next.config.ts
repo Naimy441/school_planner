@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
       { source: "/__/firebase/:path*", destination: `${FIREBASE_AUTH_HOST}/__/firebase/:path*` },
     ];
   },
+  async redirects() {
+    return [{ source: "/today", destination: "/", permanent: false }];
+  },
   async headers() {
     return [
       {
