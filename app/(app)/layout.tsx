@@ -14,6 +14,7 @@ import { AppShell } from "@/components/shell";
 import { StartFlow } from "@/components/start-flow";
 import { TimerEngine } from "@/components/timer-engine";
 import { UIProvider } from "@/components/ui-state";
+import { UpdateCheck } from "@/components/update-check";
 import { StoreProvider, useStore } from "@/lib/store";
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -54,6 +55,7 @@ function Gate({ children }: { children: React.ReactNode }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <StoreProvider>
+      <UpdateCheck />
       <UIProvider>
         <Gate>{children}</Gate>
       </UIProvider>
