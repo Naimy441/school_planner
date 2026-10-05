@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { createItem, saveSeries } from "@/lib/actions";
-import { addDays, atTime, dayKey, fromLocalInput, parseDay, toLocalInput, WEEKDAYS } from "@/lib/dates";
+import { addDays, atTime, dayKey, dueLabel, fmtTime, fromLocalInput, parseDay, toLocalInput, WEEKDAYS } from "@/lib/dates";
+import { seriesOccurrences } from "@/lib/schedule";
 import { courseLabel } from "@/lib/colors";
 import { useStore } from "@/lib/store";
 import type { ItemKind } from "@/lib/types";
@@ -28,6 +29,42 @@ export function DayPicker({ value, onChange }: { value: number[]; onChange: (v: 
           </button>
         );
       })}
+    </div>
+  );
+}
+
+const LATE_CHOICES = [
+  { label: "No", days: 0 },
+  { label: "1 day", days: 1 },
+  { label: "2 days", days: 2 },
+  { label: "3 days", days: 3 },
+  { label: "1 week", days: 7 },
+];
+
+/** Spells out what the weekly settings actually mean. */
+function SeriesPreview({ days, time, start, end, lateDays }: { days: number[]; time: string; start: string; end: string; lateDays: number }) {
+  if (!days.length || !time || !start || !end || start > end) return null;
+  const occ = seriesOccurrences(
+    { id: "", courseId: "", title: "", days, time, startDate: start, endDate: end, lateDays, createdAt: 0, active: true },
+    start,
+    end,
+  );
+  if (!occ.length) return <p className="text-[12.5px] text-warn">No due dates fall in that range — check the days or dates.</p>;
+  const first = occ[0];
+  const names = days.map((d) => WEEKDAYS[d]).join(" & ");
+  return (
+    <div className="rounded-lg border border-line bg-app/60 px-3 py-2.5 text-[13px] leading-relaxed text-ink-2">
+      <div>
+        Due every <b className="font-medium text-ink">{names}</b> at {fmtTime(time)} — {occ.length} time{occ.length === 1 ? "" : "s"}.
+      </div>
+      <div>
+        First one: <b className="font-medium text-ink">{dueLabel(first.due)}</b>
+      </div>
+      <div className="mt-1.5 text-ink-3">
+        {lateDays
+          ? `Each one can be turned in late for ${lateDays === 7 ? "a week" : `${lateDays} day${lateDays > 1 ? "s" : ""}`} — e.g. the first is accepted until ${dueLabel(first.lateDue!)}. After that it drops off your list.`
+          : "Missed ones stay on your list (no pressure) until you finish or archive them."}
+      </div>
     </div>
   );
 }
@@ -175,29 +212,35 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
             <Field label="Due on">
               <DayPicker value={days} onChange={setDays} />
             </Field>
-            <div className="grid grid-cols-3 gap-2">
-              <Field label="Time">
-                <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls} />
-              </Field>
-              <Field label="From">
+            <Field label="At">
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls} />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Starting">
                 <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} />
               </Field>
               <Field label="Until">
                 <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={inputCls} />
               </Field>
             </div>
-            <Field label="Late deadline" hint="Days after each due date that late work is still accepted. Leave empty if none.">
-              <input
-                type="number"
-                min={0}
-                max={60}
-                inputMode="numeric"
-                value={lateDays}
-                onChange={(e) => setLateDays(e.target.value)}
-                placeholder="e.g. 3"
-                className={inputCls}
-              />
+            <Field label="Late work accepted">
+              <div className="flex flex-wrap gap-1.5">
+                {LATE_CHOICES.map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => setLateDays(c.days ? String(c.days) : "")}
+                    className={cn(
+                      "h-8 rounded-md px-3 text-[13px] font-medium transition-colors",
+                      (lateDays ? +lateDays : 0) === c.days ? "bg-accent text-white" : "bg-hover text-ink-2 hover:text-ink",
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
             </Field>
+            <SeriesPreview days={days} time={time} start={start} end={end} lateDays={lateDays ? +lateDays : 0} />
             {!courseId && <p className="text-[12.5px] text-warn">Pick a class for weekly assignments.</p>}
           </>
         ) : (
@@ -217,7 +260,14 @@ function NewItemForm({ draft }: { draft: NewItemDraft }) {
                   <input type="checkbox" checked={hasLate} onChange={(e) => setHasLate(e.target.checked)} className="h-4 w-4 accent-[#2383e2]" />
                 </label>
                 {hasLate && (
-                  <Field label="Late deadline" hint="After this passes, the assignment quietly drops off your list.">
+                  <Field
+                    label="Late deadline"
+                    hint={
+                      Number.isNaN(fromLocalInput(late))
+                        ? undefined
+                        : `Late work is accepted until ${dueLabel(fromLocalInput(late))}. After that it quietly drops off your list.`
+                    }
+                  >
                     <input type="datetime-local" value={late} onChange={(e) => setLate(e.target.value)} className={inputCls} />
                   </Field>
                 )}

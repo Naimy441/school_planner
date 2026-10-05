@@ -101,6 +101,18 @@ input[type="datetime-local"],
 input[type="date"],
 input[type="time"] {
   color-scheme: dark;
+  /* iOS Safari gives these an intrinsic min-width and centres the value;
+     make them behave like normal text inputs so they fit their column. */
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+
+input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
 }
 
 .tnum {
