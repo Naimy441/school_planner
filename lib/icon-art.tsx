@@ -5,14 +5,14 @@ export function IconArt({ size, padded = false }: { size: number; padded?: boole
   const inner = s - inset * 2;
   const u = inner / 64;
   return (
-    <div style={{ width: s, height: s, display: "flex", background: "#191919", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ width: s, height: s, display: "flex", background: "#151515", alignItems: "center", justifyContent: "center" }}>
       <div
         style={{
           width: inner,
           height: inner,
           display: "flex",
           position: "relative",
-          background: "linear-gradient(145deg, #2c2c2c, #191919)",
+          background: "linear-gradient(145deg, #2c2c2c, #151515)",
           borderRadius: padded ? inner * 0.22 : 0,
         }}
       >

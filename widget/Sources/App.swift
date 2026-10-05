@@ -38,7 +38,7 @@ struct PlannerBarApp: App {
 // MARK: palette (Notion dark)
 
 enum Palette {
-    static let bg = Color(red: 0.098, green: 0.098, blue: 0.098)
+    static let bg = Color(red: 0.082, green: 0.082, blue: 0.082)
     static let panel = Color(red: 0.125, green: 0.125, blue: 0.125)
     static let line = Color.white.opacity(0.085)
     static let ink = Color.white.opacity(0.92)
