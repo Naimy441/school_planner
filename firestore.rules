@@ -1,13 +1,20 @@
 rules_version = '2';
 
-// Every document lives under /users/{uid}. A signed-in user can only ever
-// touch their own tree, and writes are shape-checked so a buggy or hostile
+// Every document lives under /users/{uid}. Only the allowed account can sign
+// in, it can only ever touch its own tree, and writes are shape-checked so a buggy or hostile
 // client can't stuff arbitrary data in. Anything not matched is denied.
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Private planner: only this verified Google account may use it.
+    function allowedUser() {
+      return request.auth != null
+        && request.auth.token.email == 'abdullah.naim.441@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
     function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
+      return allowedUser() && request.auth.uid == uid;
     }
 
     function data() {

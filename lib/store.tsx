@@ -28,6 +28,8 @@ const EMPTY_PROFILE: Profile = {
 
 interface Store {
   user: User | null;
+  /** signed in, but this account isn't allowed by the security rules */
+  denied: boolean;
   authReady: boolean;
   /** first snapshots from the server have arrived */
   ready: boolean;
@@ -67,6 +69,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [timer, setTimer] = useState<TimerState | null>(null);
   const [serverSynced, setServerSynced] = useState<Record<string, boolean>>({});
   const [now, setNow] = useState(() => Date.now());
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     return onAuthStateChanged(auth(), (u) => {
@@ -100,10 +103,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSnapshot(doc(d, ...base), { includeMetadataChanges: true }, (s) => {
         setProfile({ ...EMPTY_PROFILE, ...(s.data() as Profile | undefined) });
       }),
-      onSnapshot(collection(d, ...base, "courses"), { includeMetadataChanges: true }, (s) => {
-        setCourses(docsOf<Course>(s).sort((a, b) => a.name.localeCompare(b.name)));
-        mark("courses")(s.metadata.fromCache);
-      }),
+      onSnapshot(
+        collection(d, ...base, "courses"),
+        { includeMetadataChanges: true },
+        (s) => {
+          setDenied(false);
+          setCourses(docsOf<Course>(s).sort((a, b) => a.name.localeCompare(b.name)));
+          mark("courses")(s.metadata.fromCache);
+        },
+        (err) => err.code === "permission-denied" && setDenied(true),
+      ),
       onSnapshot(query(collection(d, ...base, "items"), where("status", "==", "open")), { includeMetadataChanges: true }, (s) => {
         setOpenItems(docsOf<Item>(s));
         mark("open")(s.metadata.fromCache);
@@ -127,6 +136,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ];
     return () => {
       subs.forEach((u) => u());
+      setDenied(false);
       setServerSynced({});
       setOpenItems([]);
       setRecentItems([]);
@@ -164,6 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     user,
+    denied,
     authReady,
     ready,
     uid,

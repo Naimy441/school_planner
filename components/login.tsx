@@ -1,6 +1,6 @@
 "use client";
 
-import { getRedirectResult, GoogleAuthProvider, signInWithCredential, signInWithPopup, signInWithRedirect } from "firebase/auth";
+import { getRedirectResult, GoogleAuthProvider, signOut, signInWithCredential, signInWithPopup, signInWithRedirect } from "firebase/auth";
 import { motion } from "motion/react";
 import { CalendarCheck, Sparkles, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -100,7 +100,7 @@ export function Login() {
               // Emulator only: it accepts unsigned fake Google tokens.
               signInWithCredential(
                 auth(),
-                GoogleAuthProvider.credential(JSON.stringify({ sub: "emulator-tester", email: "tester@example.com", name: "Sam Tester", email_verified: true })),
+                GoogleAuthProvider.credential(JSON.stringify({ sub: "emulator-tester", email: "abdullah.naim.441@gmail.com", name: "Emulator Tester", email_verified: true })),
               ).catch((e) => setErr(friendly(e)))
             }
             className="mt-3 w-full text-center text-[12.5px] text-ink-3 underline"
@@ -121,4 +121,26 @@ function friendly(e: unknown) {
   if (code === "auth/operation-not-allowed") return "Google sign-in isn't enabled for this project yet.";
   if (code === "auth/network-request-failed") return "You seem to be offline.";
   return "Sign-in didn't go through. Please try again.";
+}
+
+export function Private({ email }: { email?: string | null }) {
+  return (
+    <div className="pt-safe pb-safe flex min-h-dvh items-center justify-center px-6">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[360px] text-center">
+        <div className="flex justify-center">
+          <Logo size={52} />
+        </div>
+        <h1 className="mt-6 text-[24px] font-bold tracking-tight text-ink">This planner is private</h1>
+        <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">
+          {email ? <>You&apos;re signed in as <b className="text-ink">{email}</b>, which doesn&apos;t have access.</> : "This account doesn't have access."}
+        </p>
+        <button
+          onClick={() => signOut(auth())}
+          className="mt-8 h-11 w-full rounded-xl border border-line bg-card text-[14.5px] font-medium text-ink hover:bg-card-2"
+        >
+          Use a different account
+        </button>
+      </motion.div>
+    </div>
+  );
 }
