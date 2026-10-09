@@ -16,7 +16,7 @@ import { useUI } from "@/components/ui-state";
 import { phaseMs, remainingOf } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
 import { addDays, dayKey, dayLabel, daysUntil, fmtClock, fmtEstimate, fmtTime, greeting } from "@/lib/dates";
-import { isOverdue, isVisible, meetingSummary, nextSubtasks, progressOf, workQueue } from "@/lib/schedule";
+import { isOverdue, isTodaysExam, isVisible, meetingSummary, nextSubtasks, progressOf, workQueue } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ClassSession, Item } from "@/lib/types";
 
@@ -46,9 +46,18 @@ export default function Home() {
   const examIds = useMemo(() => new Set(exams.map((e) => e.id)), [exams]);
 
   const todayClasses = sessions.filter((s) => s.date === today && s.end > now && !attendance.has(s.id));
-  const todayItems = visible
-    .filter((i) => !examIds.has(i.id) && (dayKey(i.due) === today || isOverdue(i, now)))
-    .sort((a, b) => Number(isOverdue(a, now)) - Number(isOverdue(b, now)) || a.due - b.due);
+  // Open work for today, plus today's exams even after studying is marked done.
+  const todayItems = useMemo(() => {
+    const byId = new Map<string, Item>();
+    for (const i of visible) {
+      if (examIds.has(i.id)) continue;
+      if (dayKey(i.due) === today || isOverdue(i, now)) byId.set(i.id, i);
+    }
+    for (const i of items) {
+      if (i.status === "done" && isTodaysExam(i, now)) byId.set(i.id, i);
+    }
+    return [...byId.values()].sort((a, b) => Number(isOverdue(a, now)) - Number(isOverdue(b, now)) || a.due - b.due);
+  }, [visible, items, examIds, today, now]);
 
   const week = useMemo(() => {
     const map = new Map<string, { classes: ClassSession[]; items: Item[] }>();

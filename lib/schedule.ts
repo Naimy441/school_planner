@@ -85,6 +85,11 @@ export function isVisible(item: Item, now = Date.now()) {
   return true;
 }
 
+/** The sitting is today — keep it on Today even after study is marked done. */
+export function isTodaysExam(item: Item, now = Date.now()) {
+  return item.kind === "exam" && item.status !== "archived" && dayKey(item.due) === dayKey(now);
+}
+
 export function isOverdue(item: Item, now = Date.now()) {
   return item.kind !== "exam" && now > item.due;
 }
