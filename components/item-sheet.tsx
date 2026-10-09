@@ -274,7 +274,7 @@ function ItemPage({ item }: { item: Item }) {
   const overdue = isOverdue(item, now) && item.status === "open";
   const isExam = item.kind === "exam";
   const days = daysUntil(item.due, now);
-  const examSoon = isExam && item.due > now && days <= 7;
+  const examSoon = isExam && days >= 0 && days <= 7;
   const prepped = prepValid(item, now);
   const prep = prepped ? item.prep! : null;
   const timerHere = timer?.active && timer.itemId === item.id;
@@ -392,7 +392,9 @@ function ItemPage({ item }: { item: Item }) {
         )}
         {examSoon && isOpen && (
           <Banner tone="blue" icon={<GraduationCap className="h-4 w-4" />}>
-            <b className="font-semibold">{days <= 0 ? "Exam today" : days === 1 ? "Exam tomorrow" : `Exam in ${days} days`}.</b>{" "}
+            <b className="font-semibold">
+              {days <= 0 ? `Exam today at ${fmtTime(item.due)}.` : days === 1 ? `Exam tomorrow at ${fmtTime(item.due)}.` : `Exam in ${days} days at ${fmtTime(item.due)}.`}
+            </b>{" "}
             {total < 2
               ? "How do you want to study for it? Add a step per topic, per day, or per technique — whatever works for you."
               : "You've got a plan. One step at a time."}

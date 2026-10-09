@@ -15,7 +15,7 @@ import { Bar, Button, Card, Check, IconButton, Page, Ring, SectionTitle } from "
 import { useUI } from "@/components/ui-state";
 import { phaseMs, remainingOf } from "@/lib/actions";
 import { colorOf } from "@/lib/colors";
-import { addDays, dayKey, dayLabel, daysUntil, fmtClock, fmtEstimate, greeting } from "@/lib/dates";
+import { addDays, dayKey, dayLabel, daysUntil, fmtClock, fmtEstimate, fmtTime, greeting } from "@/lib/dates";
 import { isOverdue, isVisible, meetingSummary, nextSubtasks, progressOf, workQueue } from "@/lib/schedule";
 import { useStore } from "@/lib/store";
 import type { ClassSession, Item } from "@/lib/types";
@@ -34,9 +34,13 @@ export default function Home() {
   const top = useMemo(() => workQueue(items, now)[0], [items, now]);
   // The hero card's item still appears in its list (tagged "Up next") so lists are complete.
   const heroId = focusing ? timer?.itemId : top?.id;
-  // Exams within a week get their own strip (and aren't repeated in the lists).
+  // Exams in the coming week get their own strip (and aren't repeated in the lists).
+  // Today's exams stay in Today so the start time is visible on that row.
   const exams = useMemo(
-    () => visible.filter((i) => i.kind === "exam" && i.due > now && daysUntil(i.due, now) <= 7).sort((a, b) => a.due - b.due),
+    () =>
+      visible
+        .filter((i) => i.kind === "exam" && daysUntil(i.due, now) > 0 && daysUntil(i.due, now) <= 7)
+        .sort((a, b) => a.due - b.due),
     [visible, now],
   );
   const examIds = useMemo(() => new Set(exams.map((e) => e.id)), [exams]);
@@ -231,7 +235,7 @@ function ExamsSoon({ exams }: { exams: Item[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14.5px] text-ink">{e.title}</div>
-                {c && <Meta parts={[c.code || c.name]} />}
+                <Meta parts={[c?.code || c?.name, `Exam at ${fmtTime(e.due)}`]} />
                 {total < 2 ? (
                   <div className="mt-0.5 text-[12.5px] font-medium text-accent">Plan how you&apos;ll study →</div>
                 ) : (
@@ -297,8 +301,17 @@ function DoNext({ item }: { item: Item }) {
             </div>
             {examDays != null && examDays <= 7 && (
               <div className="shrink-0 text-right" style={{ color: colorOf(c?.color).fg }}>
-                <div className="tnum text-[26px] font-bold leading-none">{Math.max(0, examDays)}</div>
-                <div className="text-[11px] text-ink-3">{examDays === 1 ? "day" : "days"}</div>
+                {examDays <= 0 ? (
+                  <>
+                    <div className="tnum text-[18px] font-bold leading-none">{fmtTime(item.due)}</div>
+                    <div className="text-[11px] text-ink-3">today</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="tnum text-[26px] font-bold leading-none">{examDays}</div>
+                    <div className="text-[11px] text-ink-3">{examDays === 1 ? "day" : "days"}</div>
+                  </>
+                )}
               </div>
             )}
           </div>

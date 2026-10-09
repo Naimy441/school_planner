@@ -382,11 +382,17 @@ export function Sheet({
 
   if (!mounted) return null;
 
+  // Center dialogs (confirm, settings, new item, …) must sit above a docked
+  // peek sheet. Peek uses 61/62; keep these under class-gate (80) and toasts (95).
+  const overlay = mode === "center";
+  const zPanel = overlay ? "z-[71]" : front ? "z-[62]" : "z-[61]";
+  const zScrim = overlay ? "z-[70]" : "z-[60]";
+
   const panel = docked
     ? {
         className: cn(
           "fixed right-0 top-0 bottom-0 flex w-[var(--dock-w)] flex-col border-l border-line bg-panel shadow-[-12px_0_40px_rgba(0,0,0,0.3)]",
-          front ? "z-[62]" : "z-[61]",
+          zPanel,
         ),
         initial: { x: "100%" },
         animate: { x: 0 },
@@ -394,8 +400,10 @@ export function Sheet({
       }
     : desktop
       ? {
-          className:
-            "fixed left-1/2 top-[10vh] z-[61] flex max-h-[80vh] w-[min(560px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-[0_30px_80px_rgba(0,0,0,0.6)]",
+          className: cn(
+            "fixed left-1/2 top-[10vh] flex max-h-[80vh] w-[min(560px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-[0_30px_80px_rgba(0,0,0,0.6)]",
+            zPanel,
+          ),
           initial: { opacity: 0, y: 16, scale: 0.97 },
           animate: { opacity: 1, y: 0, scale: 1 },
           exit: { opacity: 0, y: 10, scale: 0.98 },
@@ -403,7 +411,7 @@ export function Sheet({
       : {
           className: cn(
             "fixed inset-x-0 bottom-0 flex max-h-[92dvh] flex-col rounded-t-[18px] border-t border-line bg-panel shadow-[0_-20px_60px_rgba(0,0,0,0.5)]",
-            front ? "z-[62]" : "z-[61]",
+            zPanel,
           ),
           initial: { y: "100%" },
           animate: { y: 0 },
@@ -417,7 +425,7 @@ export function Sheet({
           {!docked && (
             <motion.div
               key="scrim"
-              className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px]"
+              className={cn("fixed inset-0 bg-black/55 backdrop-blur-[2px]", zScrim)}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
